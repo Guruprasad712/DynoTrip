@@ -1,2 +1,18 @@
+# FastAPI and server
 fastapi
 uvicorn[standard]
+
+# Google Cloud Firestore
+google-cloud-firestore
+
+# Vertex AI
+google-cloud-aiplatform
+
+# MCP / Google Travel Agent Toolbox (if needed)
+google-adk
+
+# Environment variables
+python-dotenv
+
+# HTTP requests (optional, for any external API calls)
+requests

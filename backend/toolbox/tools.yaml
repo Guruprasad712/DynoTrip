@@ -1,0 +1,30 @@
+# MCP Toolbox configuration for DynoTrip
+name: dynotrip-toolbox
+version: 1.0
+
+# Services / APIs available
+tools:
+  - name: firestore_travel
+    type: database
+    description: "Fetch travel options from Firestore"
+    collection: travel
+    operations:
+      - query
+      - filter
+
+  - name: firestore_accommodation
+    type: database
+    description: "Fetch accommodation options from Firestore"
+    collection: accommodation
+    operations:
+      - query
+      - filter
+
+  - name: maps_location
+    type: api
+    description: "Fetch location details, coordinates, ratings using Maps API"
+    operations:
+      - get_location
+      - get_reviews
+      - get_coordinates
+
