@@ -23,6 +23,8 @@ class VertexAIClient:
 
         {user_input}
         """
-        model = aiplatform.TextGenerationModel.from_pretrained(self.model)
-        response = model.predict(prompt, max_output_tokens=500)
-        return response.text
+        model = aiplatform.Model(self.model)
+        response = model.predict(instances=[{"content": prompt}], parameters={"max_output_tokens": 500})
+        # The response format may vary depending on the model and API version
+        # Adjust parsing as needed for your model's output
+        return response.predictions[0].get("content", "")

@@ -28,4 +28,4 @@ class FirestoreClient:
         Fetch accommodation options from Firestore based on city.
         """
         docs = self.db.collection("accommodation")\
-            .where("city", "==", city).strea
+            .where("city", "==", city).stream()

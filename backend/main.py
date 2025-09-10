@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Optional: initialize FirestoreClient and VertexAIClient separately if needed
+# Initialize FirestoreClient and VertexAIClient
 firestore_client = FirestoreClient(credentials_path=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 vertex_client = VertexAIClient()
 
-# Initialize the ItineraryAgent
-agent = ItineraryAgent()
+# Initialize the ItineraryAgent with required clients
+agent = ItineraryAgent(firestore_client, vertex_client)
 
 # Sample user input JSON
 user_input = {
