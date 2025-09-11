@@ -21,9 +21,13 @@ class FirestoreClient:
 
         docs = self.db.collection("travel")\
             .where("from", "==", from_city)\
-            .where(filter=FieldFilter("to", "==", to_city))\
-            .where(filter=FieldFilter("depart_date", "==", depart_date)).stream()
-
+            .where(filter=FieldFilter("to", "==", to_city)).stream()
+        print("\n\n")
+        for doc in docs:
+            print(doc.to_dict())
+        print("\n\n")
+        if docs is None:
+            return []
         return [doc.to_dict() for doc in docs]
 
     def get_accommodation(self, city: str):
@@ -32,3 +36,15 @@ class FirestoreClient:
         """
         docs = self.db.collection("accommodation")\
             .where("city", "==", city).stream()
+        print("\n\n")
+        found = False
+        for doc in docs:
+            print(doc.to_dict())
+            found = True
+        if not found:
+            print("No documents found.")
+        print("\n\n")
+        # Re-run the query to return the list, since the stream is exhausted after iteration
+        docs = self.db.collection("accommodation")\
+            .where("city", "==", city).stream()
+        return [doc.to_dict() for doc in docs]

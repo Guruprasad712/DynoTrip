@@ -24,13 +24,14 @@ class VertexAIClient:
 
     def generate_itinerary(self, user_input: dict) -> TripItinerary:
         prompt = f"""
-        You are an AI travel assistant.
-        The following JSON contains user preferences, travel options, and accommodation options that have been fetched from Firestore.
-        Your task is to dynamically plan activities for each day, but for travel and accommodation, you must use ONLY the options provided in the JSON.
-        Generate a day-by-day itinerary with activities, travel, and accommodation details. Return the result as a structured JSON matching the TripItinerary schema:
-
-        {user_input}
+            You are an AI travel assistant.
+            The following JSON contains user preferences, and lists of available travel and accommodation options fetched from Firestore.
+            For each day, select travel and accommodation ONLY from the provided lists. Do not invent new options.
+            Dynamically plan activities for each day. Return the result as a structured JSON matching the TripItinerary schema.
+            User Input and Options:
+            {user_input}
         """
+        print(f"/n/n{prompt}/n/n")
         response = self.client.models.generate_content(
             model=self.model,
             contents=prompt,

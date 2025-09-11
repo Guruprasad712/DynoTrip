@@ -24,6 +24,8 @@ class ItineraryAgent:
         user_input["travel_options"] = travel_options
         user_input["accommodation_options"] = accommodations
 
+        print(user_input)
+
         # Generate itinerary using Vertex AI Gemini
         itinerary_text = self.vertex_client.generate_itinerary(user_input)
 
