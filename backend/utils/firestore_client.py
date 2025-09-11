@@ -17,10 +17,13 @@ class FirestoreClient:
         """
         Fetch travel options from Firestore based on origin, destination, and departure date.
         """
+        from google.cloud.firestore_v1 import FieldFilter
+
         docs = self.db.collection("travel")\
             .where("from", "==", from_city)\
-            .where("to", "==", to_city)\
-            .where("depart_date", "==", depart_date).stream()
+            .where(filter=FieldFilter("to", "==", to_city))\
+            .where(filter=FieldFilter("depart_date", "==", depart_date)).stream()
+
         return [doc.to_dict() for doc in docs]
 
     def get_accommodation(self, city: str):
