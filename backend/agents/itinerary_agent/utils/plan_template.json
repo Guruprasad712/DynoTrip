@@ -1,0 +1,31 @@
+{
+  "storyItinerary": [
+    {
+      "id": "day-1",
+      "title": "Day 1 — Today",
+      "items": [
+        { "id": "meal-day-1-0", "title": "Breakfast", "description": "", "__isMeal": true },
+        {
+          "id": "p1",
+          "title": "PLACE_TITLE",
+          "photos": [],
+          "description": "",
+          "reviews": [],
+          "rating": null
+        },
+        { "id": "meal-day-1-1", "title": "Lunch", "description": "", "__isMeal": true },
+        {
+          "id": "p2",
+          "title": "PLACE_TITLE",
+          "photos": [],
+          "description": "",
+          "reviews": [],
+          "rating": null
+        },
+        { "id": "meal-day-1-2", "title": "Dinner", "description": "", "__isMeal": true }
+      ]
+    }
+  ],
+  "suggestedPlaces": [],
+  "hiddenGems": []
+}

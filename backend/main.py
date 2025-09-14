@@ -19,8 +19,8 @@ except Exception:  # pragma: no cover
 
 from google import genai
 
-# Import TripItinerary schema for structured JSON output
-from agents.itinerary_agent.utils.vertex_ai import TripItinerary
+# Import schema and Firestore helper
+from agents.itinerary_agent.utils.plan_schema import TripPlan
 from agents.itinerary_agent.utils.firestore_client import FirestoreClient
 
 load_dotenv()
@@ -61,6 +61,61 @@ def _extract_all_text(resp) -> str:
         pass
     # Fallback
     return getattr(resp, "text", "")
+
+def _parse_duration_to_minutes(duration: str) -> int:
+    """Parse a duration string like '3 hrs', '2h 30m', '45 min' into total minutes."""
+    if not duration:
+        return 0
+    import re
+    s = duration.strip().lower()
+    total = 0
+    # Patterns: 'X hrs', 'X hr', 'Xh', 'X hours'
+    h_match = re.search(r"(\d+)\s*(h|hr|hrs|hour|hours)\b", s)
+    if h_match:
+        total += int(h_match.group(1)) * 60
+    m_match = re.search(r"(\d+)\s*(m|min|mins|minute|minutes)\b", s)
+    if m_match:
+        total += int(m_match.group(1))
+    # Fallback: plain integer assume minutes
+    if total == 0:
+        plain = re.search(r"^(\d+)$", s)
+        if plain:
+            total = int(plain.group(1))
+    return total
+
+def _enrich_travel_options_with_times(travel_opts: list[dict]) -> list[dict]:
+    """Add local departure and arrival timestamps/strings to each travel option if possible.
+    Uses TIMEZONE env (default Asia/Kolkata). Assumes depart_date is datetime.
+    """
+    import datetime as _dt
+    try:
+        from zoneinfo import ZoneInfo  # Python 3.9+
+    except Exception:
+        ZoneInfo = None  # type: ignore
+    tz_name = os.getenv("TIMEZONE", "Asia/Kolkata")
+    if ZoneInfo is not None:
+        local_tz = ZoneInfo(tz_name)
+    else:
+        local_tz = _dt.timezone(_dt.timedelta(hours=5, minutes=30))  # IST fallback
+    enriched = []
+    for opt in travel_opts or []:
+        opt2 = dict(opt)
+        depart = opt.get("depart_date")
+        duration = opt.get("duration")
+        try:
+            if isinstance(depart, _dt.datetime):
+                # Convert to local time for representation
+                d_local = depart if depart.tzinfo else depart.replace(tzinfo=_dt.timezone.utc)
+                d_local = d_local.astimezone(local_tz)
+                opt2["depart_local_iso"] = d_local.isoformat()
+                mins = _parse_duration_to_minutes(str(duration))
+                if mins > 0:
+                    arr_local = d_local + _dt.timedelta(minutes=mins)
+                    opt2["arrival_local_iso"] = arr_local.isoformat()
+        except Exception:
+            pass
+        enriched.append(opt2)
+    return enriched
 
 def read_input_json() -> dict:
     parser = argparse.ArgumentParser(description="DynoTrip: JSON-in/JSON-out itinerary generator using MCP tools")
@@ -106,16 +161,37 @@ gemini_client = genai.Client(
 )
 MODEL = os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash")
 
-def build_prompt(user_input: dict) -> str:
+def _read_plan_template() -> str:
+    """Load the JSON plan template to instruct the LLM on the exact output shape."""
+    template_path = os.path.join(
+        os.path.dirname(__file__),
+        "agents",
+        "itinerary_agent",
+        "utils",
+        "plan_template.json",
+    )
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return "{}"
+
+def build_prompt(user_input: dict, template_json: str) -> str:
     return (
         "You are an AI travel assistant.\n"
-        "Use the provided MCP tools to fetch travel and accommodation options from Firestore.\n"
-        "- Use get_travel_options(frm, to, depart_date) to fetch travel options.\n"
-        "- Use get_accommodation(city) to fetch accommodation options.\n"
-        "Only choose from the returned options; do not invent new ones.\n"
-        "Return a structured JSON that matches the TripItinerary schema.\n"
-        "User Input: "
-        + json.dumps(user_input, ensure_ascii=False, default=_json_default)
+        "When available, use MCP tools to fetch travel and accommodation options from Firestore: \n"
+        "- get_travel_options(frm, to, depart_date)\n"
+        "- get_accommodation(city)\n"
+        "Constraints:\n"
+        "- Generate an itinerary strictly matching the following JSON template shape (keys and types).\n"
+        "- Keep reviews, rating, and photos empty/blank (reviews=[], rating=null, photos=[]).\n"
+        "- Other values (ids, titles, descriptions) should be generated.\n"
+        "- Consider the chosen travel option's depart_date (local time) and duration to compute ARRIVAL time.\n"
+        "- Adapt the day's plan based on arrival: e.g., if arrival after 12:00 local, skip breakfast; if late evening arrival, skip sightseeing and go to dinner/check-in.\n"
+        "- Use accommodation from the provided options only.\n"
+        "- Do NOT include any extra commentary. Output JSON only.\n"
+        "Template: " + template_json + "\n"
+        "User Input: " + json.dumps(user_input, ensure_ascii=False, default=_json_default)
     )
 
 async def run(user_input: dict):
@@ -124,7 +200,8 @@ async def run(user_input: dict):
         # If an MCP client is available, let Gemini use tools dynamically.
         if mcp_client is not None:
             print("[main] Using MCP tools path", file=sys.stderr)
-            prompt = build_prompt(user_input)
+            template_json = _read_plan_template()
+            prompt = build_prompt(user_input, template_json)
             async with mcp_client:
                 response = await asyncio.wait_for(
                     gemini_client.aio.models.generate_content(
@@ -133,7 +210,7 @@ async def run(user_input: dict):
                         config=genai.types.GenerateContentConfig(
                             tools=[mcp_client.session],
                             response_mime_type="application/json",
-                            response_schema=TripItinerary,
+                            response_schema=TripPlan,
                         ),
                     ),
                     timeout=180,
@@ -150,15 +227,19 @@ async def run(user_input: dict):
             travel_opts = fs.get_travel_options(frm, to, depart_date) if frm and to else []
             stay_opts = fs.get_accommodation(city_for_stay) if city_for_stay else []
             print(f"[main] Found travel={len(travel_opts)} options, accommodation={len(stay_opts)} options", file=sys.stderr)
+            template_json = _read_plan_template()
             enriched = {
                 **user_input,
-                "available_travel_options": travel_opts,
+                "available_travel_options": _enrich_travel_options_with_times(travel_opts),
                 "available_accommodation_options": stay_opts,
             }
             prompt = (
-                "You are an AI travel assistant. Given the user preferences and the provided travel and accommodation "
-                "options (do not invent new ones for travel or accommodation), plan the itinerary. Return JSON that "
-                "matches the TripItinerary schema.\nData:\n" + json.dumps(enriched, ensure_ascii=False, default=_json_default)
+                "You are an AI travel assistant. Given the user preferences and the provided travel and accommodation options "
+                "(do not invent new ones), compute arrival time from each travel option's depart_date + duration (local timezone), and adapt meals/activities accordingly.\n"
+                "Rules: If arrival after 12:00 local, skip breakfast and start from check-in/places/snacks/dinner. If arrival after 18:00, skip sightseeing and prioritize dinner/check-in.\n"
+                "Generate an itinerary strictly matching the provided template shape. Keep reviews, rating and photos empty. Output JSON only.\nData:\n"
+                + json.dumps(enriched, ensure_ascii=False, default=_json_default)
+                + "\nTemplate:\n" + template_json
             )
             response = await asyncio.wait_for(
                 gemini_client.aio.models.generate_content(
@@ -166,16 +247,40 @@ async def run(user_input: dict):
                     contents=prompt,
                     config=genai.types.GenerateContentConfig(
                         response_mime_type="application/json",
-                        response_schema=TripItinerary,
+                        response_schema=TripPlan,
                     ),
                 ),
                 timeout=180,
             )
-        # Print result
+        # Extract parsed JSON and save only the JSON to Firestore
+        destination = user_input.get("destination") or user_input.get("to") or "unknown"
+        fs_for_save = FirestoreClient(credentials_path=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+        plan_dict = None
         if getattr(response, "parsed", None) is not None:
-            print(json.dumps(response.parsed.model_dump(), indent=2))
-        else:
-            print(_extract_all_text(response))
+            try:
+                # If parsed is a Pydantic model (TripPlan), convert to dict
+                plan_dict = response.parsed.model_dump(by_alias=True)
+            except Exception:
+                try:
+                    plan_dict = json.loads(json.dumps(response.parsed))
+                except Exception:
+                    plan_dict = None
+        if plan_dict is None:
+            # Fallback: try to extract JSON from text-only response
+            text = _extract_all_text(response)
+            start = text.find('{')
+            end = text.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                try:
+                    plan_dict = json.loads(text[start:end+1])
+                except Exception:
+                    plan_dict = None
+        if plan_dict is None:
+            raise ValueError("LLM did not return valid JSON matching TripPlan")
+
+        # Save JSON to Firestore
+        doc_id = fs_for_save.save_generated_plan(destination, plan_dict)
+        print(json.dumps({"saved_document_id": doc_id}, ensure_ascii=False))
     except asyncio.TimeoutError:
         print("[error] Generation timed out after 180s. Check network/VPC egress and Vertex AI permissions.", file=sys.stderr)
         sys.exit(2)
