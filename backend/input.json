@@ -1,0 +1,16 @@
+{
+  "departure": "Chennai",
+  "destination": "Pondicherry",
+  "startDate": "2025-09-19",
+  "endDate": "2025-09-21",
+  "budget": 100000,
+  "members": {
+    "adults": 2,
+    "children": 0
+  },
+  "activities": [
+    "Sightseeing"
+  ],
+  "tripTheme": "Heritage",
+  "specialInstructions": ""
+}
