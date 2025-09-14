@@ -16,3 +16,7 @@ python-dotenv
 
 # HTTP requests (optional, for any external API calls)
 requests
+
+fastmcp
+google-genai
+httpx
