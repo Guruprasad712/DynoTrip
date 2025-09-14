@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\Admin\OneDrive\Desktop\GenAI_google_hackathon\Dynatrip_github_latest\DynoTrip\.venv"
+VIRTUAL_ENV="C:\Users\Admin\OneDrive\Desktop\GenAI_google_hackathon\MCP_working_setup\DynoTrip\.venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

@@ -110,3 +110,32 @@ class FirestoreClient:
             .stream()
         )
         return [doc.to_dict() for doc in docs]
+
+    def _slugify(self, text: str) -> str:
+        """Simple slugify to create Firestore-safe document IDs."""
+        if not text:
+            return "unknown"
+        allowed = []
+        for ch in text.lower():
+            if ch.isalnum():
+                allowed.append(ch)
+            elif ch in [' ', '-', '_']:
+                allowed.append('-')
+        slug = ''.join(allowed)
+        while '--' in slug:
+            slug = slug.replace('--', '-')
+        return slug.strip('-') or "unknown"
+
+    def save_generated_plan(self, destination: str, plan_json: dict) -> str:
+        """
+        Save the generated plan JSON into the 'generated-plan' collection.
+        Document ID format: '{destination}-travel-plan-{timestamp}'.
+        Returns the document ID.
+        """
+        ts = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        dest_slug = self._slugify(destination or 'unknown')
+        doc_id = f"{dest_slug}-travel-plan-{ts}"
+        doc_ref = self.db.collection("generated-plan").document(doc_id)
+        # Store ONLY the plan JSON at the root of the document, per requirement
+        doc_ref.set(plan_json)
+        return doc_id
