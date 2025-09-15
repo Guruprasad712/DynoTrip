@@ -24,6 +24,31 @@
         },
         { "id": "meal-day-1-2", "title": "Dinner", "description": "", "__isMeal": true }
       ]
+    },
+    {
+      "id": "day-2",
+      "title": "Day 2 — Tomorrow",
+      "items": [
+        { "id": "meal-day-2-0", "title": "Breakfast", "description": "", "__isMeal": true },
+        {
+          "id": "p3",
+          "title": "PLACE_TITLE",
+          "photos": [],
+          "description": "",
+          "reviews": [],
+          "rating": null
+        },
+        { "id": "meal-day-2-1", "title": "Lunch", "description": "", "__isMeal": true },
+        {
+          "id": "p4",
+          "title": "PLACE_TITLE",
+          "photos": [],
+          "description": "",
+          "reviews": [],
+          "rating": null
+        },
+        { "id": "meal-day-2-2", "title": "Dinner", "description": "", "__isMeal": true }
+      ]
     }
   ],
   "suggestedPlaces": [],

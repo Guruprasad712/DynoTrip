@@ -9,15 +9,23 @@ def main():
     # Get the directory of this script
     script_dir = Path(__file__).parent.absolute()
     
+    # Resolve Python interpreter: prefer local venv Python
+    venv_python = script_dir / ".venv" / "Scripts" / "python.exe"
+    python_exec = str(venv_python) if venv_python.exists() else sys.executable
+    if venv_python.exists():
+        print(f"Using venv interpreter: {python_exec}")
+    else:
+        print(f"Venv python not found, using current interpreter: {python_exec}")
+
     # Command to start the MCP server
     mcp_script = script_dir / "agents" / "itinerary_agent" / "utils" / "agent.py"
     
     print("Starting MCP server...")
     mcp_process = subprocess.Popen(
-        [sys.executable, str(mcp_script)],
+        [python_exec, str(mcp_script)],
         cwd=script_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
         text=True
     )
     
@@ -35,7 +43,7 @@ def main():
         print(f"Running main.py with input file: {input_file}")
         main_script = script_dir / "main.py"
         main_process = subprocess.Popen(
-            [sys.executable, str(main_script), "--input-file", str(input_file)],
+            [python_exec, str(main_script), "--input-file", str(input_file)],
             cwd=script_dir,
             stdout=sys.stdout,
             stderr=sys.stderr
