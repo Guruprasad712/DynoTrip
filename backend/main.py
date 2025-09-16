@@ -125,12 +125,19 @@ def read_input_json() -> dict:
     try:
         if args.input_file:
             with open(args.input_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                # Normalize if wrapped as {"inputJson": {...}}
+                if isinstance(data, dict) and "inputJson" in data and isinstance(data["inputJson"], dict):
+                    return data["inputJson"]
+                return data
         else:
             data = sys.stdin.read()
             if not data.strip():
                 raise ValueError("No input provided. Pass --input-file or pipe JSON to stdin.")
-            return json.loads(data)
+            obj = json.loads(data)
+            if isinstance(obj, dict) and "inputJson" in obj and isinstance(obj["inputJson"], dict):
+                return obj["inputJson"]
+            return obj
     except json.JSONDecodeError as e:
         print(f"Invalid JSON input: {e}", file=sys.stderr)
         sys.exit(1)
@@ -204,10 +211,16 @@ def build_prompt(user_input: dict, template_json: str) -> str:
     parts.append("- get_travel_options(frm, to, depart_date)\n")
     parts.append("- get_accommodation(city)\n")
     parts.append("- place_details(query): returns {rating, total_ratings, rating_str, photos:[url...], reviews:[text...]} for a place name/text query.\n")
+    parts.append("- compute_route(origin, destination, intermediates:[string], travel_mode?, routing_preference?): returns optimizedIntermediateWaypointIndex, total distance/duration, and legs. Use this to route-optimize daily visiting order.\n")
     parts.append("Constraints:\n")
     parts.append("- Generate an itinerary strictly matching the following JSON template shape (keys and types).\n")
+    parts.append("- Place descriptions MUST be exactly one sentence (concise, <= 25 words).\n")
+    parts.append("- Reviews MUST be formatted as 2–3 short lines per review (use \\n line breaks). Keep each line concise (<= 80 chars).\n")
     parts.append("- For each place that you mention in storyItinerary.items (PlaceItem), and for each item in suggestedPlaces and hiddenGems, you MUST call the MCP tool place_details using a query formatted as '<place title>, <destination city>'.\n")
     parts.append("- Destination city hint to use in queries: '" + str(user_input.get('destination') or user_input.get('to') or '') + "'.\n")
+    parts.append("- Call compute_route once per day, and only if that day has 2 or more places to order.\n")
+    parts.append("- For PlaceItem entries (main itinerary), include up to 3 photos per place, 1-sentence description, and 2–3 short reviews.\n")
+    parts.append("- For suggestedPlaces and hiddenGems specifically: include exactly 1 photo URL, exactly 1 review (2–3 short lines), and rating if available (use place_details). If the tool has no data, set photos=[], reviews=[], rating=null for that item.\n")
     if num_days_hint:
         parts.append(num_days_hint)
     if activities:
@@ -221,7 +234,7 @@ def build_prompt(user_input: dict, template_json: str) -> str:
     parts.append("- Populate photos (array of URLs), reviews (array of up to 3 review texts), and rating (string) from the tool response.\n")
     parts.append("  The rating field must be a string formatted exactly as '<avg-rating> (<total-ratings>)', e.g., '4.6 (1234)'.\n")
     parts.append("  Prefer place_details.rating_str when available; otherwise format from place_details.rating and place_details.total_ratings.\n")
-    parts.append("- Limit the total number of place_details calls to at most 14 across the entire plan to keep responses fast. If you exceed this budget, enrich the first items and leave the rest with photos=[], reviews=[], rating=null.\n")
+    parts.append("- Limit the total number of place_details calls to at most 8 across the entire plan to keep responses fast. If you exceed this budget, enrich the first items and leave the rest with photos=[], reviews=[], rating=null.\n")
     parts.append("- If the tool fails or returns no data for a particular place, set photos=[], reviews=[], and rating=null for that place.\n")
     parts.append("- Other values (ids, titles, descriptions) should be generated.\n")
     parts.append("- Use get_travel_options to list available options. Choose ONE primary option that best fits budget and schedule.\n")
@@ -300,9 +313,8 @@ async def run(user_input: dict):
                 ),
                 timeout=gen_timeout,
             )
-        # Extract parsed JSON and save only the JSON to Firestore
+        # Extract parsed JSON
         destination = user_input.get("destination") or user_input.get("to") or "unknown"
-        fs_for_save = FirestoreClient(credentials_path=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
         plan_dict = None
         if getattr(response, "parsed", None) is not None:
             try:
@@ -325,10 +337,8 @@ async def run(user_input: dict):
                     plan_dict = None
         if plan_dict is None:
             raise ValueError("LLM did not return valid JSON matching TripPlan")
-
-        # Save JSON to Firestore
-        doc_id = fs_for_save.save_generated_plan(destination, plan_dict)
-        print(json.dumps({"saved_document_id": doc_id}, ensure_ascii=False))
+        # Print JSON to stdout (no DB writes)
+        print(json.dumps(plan_dict, ensure_ascii=False))
     except asyncio.TimeoutError:
         print(f"[error] Generation timed out after {gen_timeout}s. Check network/VPC egress and Vertex AI permissions.", file=sys.stderr)
         sys.exit(2)

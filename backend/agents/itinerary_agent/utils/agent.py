@@ -41,7 +41,7 @@ def _places_search(text_query: str, api_key: str):
         'X-Goog-FieldMask': 'places.id,places.name,places.displayName,places.formattedAddress,places.googleMapsUri',
     }
     payload = {"textQuery": text_query, "maxResultCount": 1, "languageCode": "en"}
-    resp = requests.post(url, headers=headers, json=payload, timeout=20)
+    resp = requests.post(url, headers=headers, json=payload, timeout=10)
     resp.raise_for_status()
     data = resp.json()
     places = data.get('places') or []
@@ -64,7 +64,7 @@ def _places_details(place_id: str, api_key: str):
         # Only fetch what we actually use
         'X-Goog-FieldMask': 'rating,userRatingCount,photos,reviews',
     }
-    resp = requests.get(url, headers=headers, timeout=20)
+    resp = requests.get(url, headers=headers, timeout=10)
     resp.raise_for_status()
     data = resp.json()
     if PLACES_DEBUG:
@@ -135,6 +135,82 @@ def place_details(query: str) -> dict:
             "photos": photos,
             "reviews": [t for t in review_texts if t],
         }
+    except requests.HTTPError as e:
+        try:
+            return {"error": f"HTTP {e.response.status_code}", "details": e.response.json()}
+        except Exception:
+            return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
+
+# ---- Routes API (Directions v2) for waypoint optimization ----
+ROUTES_ENDPOINT = "https://routes.googleapis.com/directions/v2:computeRoutes"
+
+def _place_from_address(addr: str) -> dict:
+    return {"address": addr}
+
+def _compute_routes_api(origin: dict, destination: dict, intermediates: list[dict], api_key: str,
+                        travel_mode: str = "DRIVE", routing_preference: str = "TRAFFIC_AWARE") -> dict:
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        # Slim field mask for faster responses
+        "X-Goog-FieldMask": ",".join([
+            "routes.distanceMeters",
+            "routes.duration",
+            "routes.legs.distanceMeters",
+            "routes.legs.duration",
+            "routes.optimizedIntermediateWaypointIndex",
+        ]),
+    }
+    payload = {
+        "origin": origin,
+        "destination": destination,
+        "intermediates": intermediates,
+        "travelMode": travel_mode,
+        "routingPreference": routing_preference,
+        "computeAlternativeRoutes": False,
+        "optimizeWaypointOrder": True,
+    }
+    resp = requests.post(ROUTES_ENDPOINT, headers=headers, json=payload, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+@mcp.tool
+def compute_route(origin: str, destination: str, intermediates: list[str] | None = None,
+                  travel_mode: str = "DRIVE", routing_preference: str = "TRAFFIC_AWARE") -> dict:
+    """
+    Optimize waypoint order and return route summary using Google Routes API.
+
+    Args:
+      origin: Origin address string
+      destination: Destination address string
+      intermediates: List of intermediate waypoint address strings
+      travel_mode: DRIVE | BICYCLE | WALK | TWO_WHEELER | TRANSIT
+      routing_preference: TRAFFIC_AWARE | TRAFFIC_AWARE_OPTIMAL | FUEL_EFFICIENT
+
+    Returns:
+      { routes: [...], routes[0].optimizedIntermediateWaypointIndex, distanceMeters, duration, legs }
+    """
+    api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return {"error": "GOOGLE_MAPS_API_KEY not configured"}
+    if not origin or not destination:
+        return {"error": "origin and destination are required"}
+    try:
+        ints = intermediates or []
+        origin_p = _place_from_address(origin)
+        dest_p = _place_from_address(destination)
+        ints_p = [_place_from_address(a) for a in ints]
+        data = _compute_routes_api(origin_p, dest_p, ints_p, api_key, travel_mode, routing_preference)
+        # Convenience mapping of optimized names
+        try:
+            route0 = (data.get("routes") or [{}])[0]
+            idxs = route0.get("optimizedIntermediateWaypointIndex") or []
+            data["optimizedNames"] = [ints[i] for i in idxs if 0 <= i < len(ints)]
+        except Exception:
+            pass
+        return data
     except requests.HTTPError as e:
         try:
             return {"error": f"HTTP {e.response.status_code}", "details": e.response.json()}

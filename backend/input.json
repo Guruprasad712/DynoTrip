@@ -1,16 +1,15 @@
 {
-  "departure": "Chennai",
-  "destination": "Pondicherry",
-  "startDate": "2025-09-19",
-  "endDate": "2025-09-21",
-  "budget": 100000,
-  "members": {
-    "adults": 2,
-    "children": 0
-  },
-  "activities": [
-    "Sightseeing"
-  ],
-  "tripTheme": "Heritage",
-  "specialInstructions": ""
+  "inputJson": {
+    "departure": "Chennai",
+    "destination": "Pondicherry",
+    "startDate": "2025-10-10",
+    "endDate": "2025-10-11",
+    "budget": 15000,
+    "members": { "adults": 2, "children": 0 },
+    "activities": ["Sightseeing", "Food"],
+    "tripTheme": "Heritage",
+    "specialInstructions": "Prefer coastal views and vegetarian meals",
+    "createdAt": "2025-09-14T00:00:00.000Z"
+  }
+
 }
