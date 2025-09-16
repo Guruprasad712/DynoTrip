@@ -177,26 +177,72 @@ def _read_plan_template() -> str:
         return "{}"
 
 def build_prompt(user_input: dict, template_json: str) -> str:
-    return (
-        "You are an AI travel assistant.\n"
-        "When available, use MCP tools to fetch travel and accommodation options from Firestore: \n"
-        "- get_travel_options(frm, to, depart_date)\n"
-        "- get_accommodation(city)\n"
-        "Constraints:\n"
-        "- Generate an itinerary strictly matching the following JSON template shape (keys and types).\n"
-        "- Keep reviews, rating, and photos empty/blank (reviews=[], rating=null, photos=[]).\n"
-        "- Other values (ids, titles, descriptions) should be generated.\n"
-        "- Consider the chosen travel option's depart_date (local time) and duration to compute ARRIVAL time.\n"
-        "- Adapt the day's plan based on arrival: e.g., if arrival after 12:00 local, skip breakfast; if late evening arrival, skip sightseeing and go to dinner/check-in.\n"
-        "- Use accommodation from the provided options only.\n"
-        "- Do NOT include any extra commentary. Output JSON only.\n"
-        "Template: " + template_json + "\n"
-        "User Input: " + json.dumps(user_input, ensure_ascii=False, default=_json_default)
-    )
+    # Derive helper hints from user input for stronger alignment
+    import datetime as _dt
+    start = user_input.get('startDate')
+    end = user_input.get('endDate')
+    num_days_hint = ''
+    try:
+        if start and end:
+            sd = _dt.date.fromisoformat(str(start))
+            ed = _dt.date.fromisoformat(str(end))
+            # Inclusive day count (e.g., 19..21 -> 3 days)
+            num_days = (ed - sd).days + 1
+            if num_days > 0:
+                num_days_hint = f"- Create storyItinerary with exactly {num_days} days covering {start} to {end}.\n"
+    except Exception:
+        pass
+    activities = user_input.get('activities') or []
+    theme = user_input.get('tripTheme') or ''
+    budget = user_input.get('budget')
+    adults = (user_input.get('members') or {}).get('adults')
+    children = (user_input.get('members') or {}).get('children')
+
+    parts = []
+    parts.append("You are an AI travel assistant.\n")
+    parts.append("When available, use MCP tools to fetch data: \n")
+    parts.append("- get_travel_options(frm, to, depart_date)\n")
+    parts.append("- get_accommodation(city)\n")
+    parts.append("- place_details(query): returns {rating, total_ratings, rating_str, photos:[url...], reviews:[text...]} for a place name/text query.\n")
+    parts.append("Constraints:\n")
+    parts.append("- Generate an itinerary strictly matching the following JSON template shape (keys and types).\n")
+    parts.append("- For each place that you mention in storyItinerary.items (PlaceItem), and for each item in suggestedPlaces and hiddenGems, you MUST call the MCP tool place_details using a query formatted as '<place title>, <destination city>'.\n")
+    parts.append("- Destination city hint to use in queries: '" + str(user_input.get('destination') or user_input.get('to') or '') + "'.\n")
+    if num_days_hint:
+        parts.append(num_days_hint)
+    if activities:
+        parts.append(f"- Optimize for activities: {', '.join(activities)}.\n")
+    if theme:
+        parts.append(f"- Trip theme: {theme}. Reflect this in place choices and descriptions.\n")
+    if budget is not None:
+        parts.append(f"- Budget: {budget}. Keep choices consistent with the budget level.\n")
+    if adults is not None or children is not None:
+        parts.append(f"- Party: adults={adults}, children={children}. Prefer family-friendly options if children>0.\n")
+    parts.append("- Populate photos (array of URLs), reviews (array of up to 3 review texts), and rating (string) from the tool response.\n")
+    parts.append("  The rating field must be a string formatted exactly as '<avg-rating> (<total-ratings>)', e.g., '4.6 (1234)'.\n")
+    parts.append("  Prefer place_details.rating_str when available; otherwise format from place_details.rating and place_details.total_ratings.\n")
+    parts.append("- Limit the total number of place_details calls to at most 14 across the entire plan to keep responses fast. If you exceed this budget, enrich the first items and leave the rest with photos=[], reviews=[], rating=null.\n")
+    parts.append("- If the tool fails or returns no data for a particular place, set photos=[], reviews=[], and rating=null for that place.\n")
+    parts.append("- Other values (ids, titles, descriptions) should be generated.\n")
+    parts.append("- Use get_travel_options to list available options. Choose ONE primary option that best fits budget and schedule.\n")
+    parts.append("- Compute the actual ARRIVAL local time = depart_date + duration (convert to destination local timezone).\n")
+    parts.append("- Adapt Day 1 strictly based on this arrival time: if arrival > 12:00, skip breakfast; if arrival > 18:00, skip sightseeing and prioritize dinner/check-in.\n")
+    parts.append("- If arrival is late night (e.g., after 22:00), keep Day 1 minimal (check-in, light snack, rest) and shift main activities to subsequent days.\n")
+    parts.append("- Use accommodation from the provided options only.\n")
+    parts.append("- Do NOT include any extra commentary. Output JSON only.\n")
+    parts.append("Template: " + template_json + "\n")
+    parts.append("User Input: " + json.dumps(user_input, ensure_ascii=False, default=_json_default))
+    return ''.join(parts)
 
 async def run(user_input: dict):
     try:
         print("[main] Starting run()", file=sys.stderr)
+        # Determine generation timeout
+        try:
+            gen_timeout = int(os.getenv("GENERATION_TIMEOUT_SEC", "300"))
+        except Exception:
+            gen_timeout = 300
+        print(f"[main] Using generation timeout: {gen_timeout}s", file=sys.stderr)
         # If an MCP client is available, let Gemini use tools dynamically.
         if mcp_client is not None:
             print("[main] Using MCP tools path", file=sys.stderr)
@@ -213,7 +259,7 @@ async def run(user_input: dict):
                             response_schema=TripPlan,
                         ),
                     ),
-                    timeout=180,
+                    timeout=gen_timeout,
                 )
         else:
             # Fallback: fetch Firestore data directly and let Gemini plan with injected options.
@@ -237,7 +283,9 @@ async def run(user_input: dict):
                 "You are an AI travel assistant. Given the user preferences and the provided travel and accommodation options "
                 "(do not invent new ones), compute arrival time from each travel option's depart_date + duration (local timezone), and adapt meals/activities accordingly.\n"
                 "Rules: If arrival after 12:00 local, skip breakfast and start from check-in/places/snacks/dinner. If arrival after 18:00, skip sightseeing and prioritize dinner/check-in.\n"
-                "Generate an itinerary strictly matching the provided template shape. Keep reviews, rating and photos empty. Output JSON only.\nData:\n"
+                "Generate an itinerary strictly matching the provided template shape.\n"
+                "For each place that you mention (PlaceItem, suggestedPlaces, hiddenGems), set photos=[], reviews=[], rating=null since MCP tools are not available in this fallback path. Output JSON only.\n"
+                "Data:\n"
                 + json.dumps(enriched, ensure_ascii=False, default=_json_default)
                 + "\nTemplate:\n" + template_json
             )
@@ -250,7 +298,7 @@ async def run(user_input: dict):
                         response_schema=TripPlan,
                     ),
                 ),
-                timeout=180,
+                timeout=gen_timeout,
             )
         # Extract parsed JSON and save only the JSON to Firestore
         destination = user_input.get("destination") or user_input.get("to") or "unknown"
@@ -282,7 +330,7 @@ async def run(user_input: dict):
         doc_id = fs_for_save.save_generated_plan(destination, plan_dict)
         print(json.dumps({"saved_document_id": doc_id}, ensure_ascii=False))
     except asyncio.TimeoutError:
-        print("[error] Generation timed out after 180s. Check network/VPC egress and Vertex AI permissions.", file=sys.stderr)
+        print(f"[error] Generation timed out after {gen_timeout}s. Check network/VPC egress and Vertex AI permissions.", file=sys.stderr)
         sys.exit(2)
     except Exception as e:
         print(f"[error] {type(e).__name__}: {e}", file=sys.stderr)

@@ -15,7 +15,7 @@ class PlaceItem(BaseModel):
     photos: List[str] = []
     description: str = ""
     reviews: List[str] = []
-    rating: Optional[float] = None
+    rating: Optional[str] = None
 
 Item = Union[MealItem, PlaceItem]
 
@@ -30,7 +30,7 @@ class SuggestedPlace(BaseModel):
     photos: List[str] = []
     description: str = ""
     reviews: List[str] = []
-    rating: Optional[float] = None
+    rating: Optional[str] = None
 
 class TripPlan(BaseModel):
     storyItinerary: List[DayStory]
