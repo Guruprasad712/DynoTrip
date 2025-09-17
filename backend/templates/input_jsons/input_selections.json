@@ -1,61 +1,68 @@
 {
-    "userPref": {
-      "departure": "<string, e.g. 'Chennai'>",
-      "destination": "<string, e.g. 'Pondicherry'>",
-      "startDate": "<YYYY-MM-DD, e.g. '2025-10-10'>",
-      "endDate": "<YYYY-MM-DD, e.g. '2025-10-11'>",
-      "budget": "<int, e.g. 15000>",
-      "members": {
-        "adults": "<int, e.g. 2>",
-        "children": "<int, e.g. 0>"
-      },
-      "activities": ["<string, e.g. 'Sightseeing'>", "<string, e.g. 'Food'>"],
-      "tripTheme": "<string, e.g. 'Heritage'>",
-      "specialInstructions": "<string, e.g. 'Prefer coastal views and vegetarian meals'>",
-      "createdAt": "<ISO timestamp, e.g. '2025-09-14T00:00:00.000Z'>"
+  "userPref": {
+    "departure": "<string, e.g. 'Chennai'>",
+    "destination": "<string, e.g. 'Pondicherry'>",
+    "startDate": "<YYYY-MM-DD, e.g. '2025-10-10'>",
+    "endDate": "<YYYY-MM-DD, e.g. '2025-10-11'>",
+    "budget": "<int, e.g. 15000>",
+    "members": {
+      "adults": "<int, e.g. 2>",
+      "children": "<int, e.g. 0>"
     },
-    "selections": {
-      "transportSelections": {
-        "outbound": {
-          "type": "<string, e.g. 'train' | 'flight' | 'bus'>",
-          "optionId": "<string, unique id, e.g. 'train-01'>",
-          "option": {
-            "id": "<string, same as optionId, e.g. 'train-01'>",
-            "operator": "<string, e.g. 'Indian Railways' or airline/bus operator'>",
-            "trainNumber": "<string, if train, e.g. '12656'>",
-            "flightNumber": "<string, if flight, e.g. 'IX-789'>",
-            "busNumber": "<string, if bus, optional>",
-            "departureTime": "<HH:MM, e.g. '07:00'>",
-            "arrivalTime": "<HH:MM, e.g. '09:00'>",
-            "price": "<int, e.g. 300>"
-          }
-        },
-        "return": {
-          "type": "<string, e.g. 'flight'>",
-          "optionId": "<string, unique id, e.g. 'flight-02'>",
-          "option": {
-            "id": "<string, same as optionId, e.g. 'flight-02'>",
-            "airline": "<string, e.g. 'Air India Express'>",
-            "flightNumber": "<string, e.g. 'IX-789'>",
-            "departureTime": "<HH:MM, e.g. '11:15'>",
-            "arrivalTime": "<HH:MM, e.g. '12:25'>",
-            "price": "<int, e.g. 2900>"
-          }
+    "activities": ["<string, e.g. 'Sightseeing'>", "<string, e.g. 'Food'>"],
+    "tripTheme": "<string, e.g. 'Heritage'>",
+    "specialInstructions": "<string, e.g. 'Prefer coastal views and vegetarian meals'>",
+    "createdAt": "<ISO timestamp, e.g. '2025-09-14T00:00:00.000Z'>"
+  },
+  "selections": {
+    "transportSelections": {
+      "outbound": {
+        "type": "<string, e.g. 'train' | 'flight' | 'bus'>",
+        "optionId": "<string, unique id, e.g. 'train-01'>",
+        "option": {
+          "id": "<string, same as optionId, e.g. 'train-01'>",
+          "operator": "<string, e.g. 'Indian Railways' or airline/bus operator'>",
+          "trainNumber": "<string, if train, e.g. '12656'>",
+          "flightNumber": "<string, if flight, e.g. 'IX-789'>",
+          "busNumber": "<string, if bus, optional>",
+          "departureTime": "<HH:MM, e.g. '07:00'>",
+          "arrivalTime": "<HH:MM, e.g. '09:00'>",
+          "price": "<int, e.g. 300>"
         }
       },
-      "hotelsSelection": {
-        "useSameHotel": "<boolean, e.g. true>",
-        "booking": {
-          "hotelId": "<string, e.g. 'h-01'>",
-          "name": "<string, e.g. 'Ocean View Resort'>",
-          "pricePerNight": "<int, e.g. 3500>",
-          "nights": "<int, e.g. 1>",
-          "totalPrice": "<int, e.g. 3500>",
-          "checkIn": "<YYYY-MM-DD, e.g. '2025-10-10'>",
-          "checkOut": "<YYYY-MM-DD, e.g. '2025-10-11'>"
+      "return": {
+        "type": "<string, e.g. 'flight'>",
+        "optionId": "<string, unique id, e.g. 'flight-02'>",
+        "option": {
+          "id": "<string, same as optionId, e.g. 'flight-02'>",
+          "airline": "<string, e.g. 'Air India Express'>",
+          "flightNumber": "<string, e.g. 'IX-789'>",
+          "departureTime": "<HH:MM, e.g. '11:15'>",
+          "arrivalTime": "<HH:MM, e.g. '12:25'>",
+          "price": "<int, e.g. 2900>"
         }
       }
+    },
+    "hotelsSelection": {
+      "useSameHotel": "<boolean, e.g. true>",
+      "booking": {
+        "hotelId": "<string, e.g. 'h-01'>",
+        "name": "<string, e.g. 'Ocean View Resort'>",
+        "pricePerNight": "<int, e.g. 3500>",
+        "nights": "<int, e.g. 1>",
+        "totalPrice": "<int, e.g. 3500>",
+        "checkIn": "<YYYY-MM-DD, e.g. '2025-10-10'>",
+        "checkOut": "<YYYY-MM-DD, e.g. '2025-10-11'>"
+      },
+      "bookingPerDay": [
+        {
+          "day": "<string day-id, e.g. 'day-1'>",
+          "hotelId": "<string, e.g. 'h-01'>",
+          "name": "<string, e.g. 'Hotel A'>",
+          "pricePerNight": "<int, e.g. 2500>",
+          "date": "<YYYY-MM-DD, e.g. '2025-10-10'>"
+        }
+      ]
     }
   }
-  
-  
+}
