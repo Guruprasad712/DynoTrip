@@ -1,0 +1,55 @@
+{
+    "generatedPlan": {
+      "meta": {
+        "departure": "<city_name> (eg: Chennai)",
+        "destination": "<city_name> (eg: Pondicherry)",
+        "startDate": "<YYYY-MM-DD> (eg: 2025-10-10)",
+        "endDate": "<YYYY-MM-DD> (eg: 2025-10-11)",
+        "updatedAt": "<ISO_timestamp> (eg: 2025-09-14T00:00:00.000Z)"
+      },
+      "specialInstructions": "<custom_notes> (eg: Guest prefers coastal viewpoints and vegetarian-only lunches.)",
+      "storyItinerary": [
+        {
+          "id": "day-<NN> (eg: day-1)",
+          "title": "Day <N> (eg: Day 1)",
+          "date": "<YYYY-MM-DD> (eg: 2025-10-10)",
+          "items": [
+            {
+              "id": "meal-day-<N>-<NN> (eg: meal-day-1-0)",
+              "__isMeal": true,
+              "title": "<meal_type> (eg: Breakfast)",
+              "description": "<meal_description> (eg: Enjoy a South-Indian vegetarian breakfast.)"
+            },
+            {
+              "id": "place-<location_code>-<NN> (eg: place-pond-1)",
+              "title": "<place_name> (eg: Promenade Beach)",
+              "description": "<place_description> (eg: Walk the shoreline and take photos.)",
+              "photos": ["<image_url> (eg: https://images.unsplash.com/...)"],
+              "rating": "<numeric_rating> (eg: 4.7)",
+              "reviews": ["<review_text> (eg: Lovely sunrise view)", "<review_text> (eg: Clean walkway)"],
+              "price": "<numeric_price> (eg: 200)"
+            }
+          ]
+        }
+      ],
+      "suggestedPlaces": [
+        {
+          "id": "sug-<NN> (eg: sug-1)",
+          "title": "<place_title> (eg: Heritage Walk)",
+          "description": "<place_description> (eg: Guided walk through the French Quarter.)",
+          "photos": ["<image_url> (eg: https://images.unsplash.com/...)"],
+          "rating": "<numeric_rating> (eg: 4.5)"
+        }
+      ],
+      "hiddenGems": [
+        {
+          "id": "hg-<NN> (eg: hg-1)",
+          "title": "<gem_title> (eg: Tiny Pottery Studio)",
+          "description": "<gem_description> (eg: Local pottery workshop — try a short lesson.)",
+          "photos": ["<image_url> (eg: https://images.unsplash.com/...)"],
+          "rating": "<numeric_rating> (eg: 4.9)"
+        }
+      ]
+    }
+  }
+  

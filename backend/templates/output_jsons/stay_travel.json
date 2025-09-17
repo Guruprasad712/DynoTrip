@@ -1,0 +1,128 @@
+{
+    "travelDoc": {
+      "meta": {
+        "departure": "<string, e.g. 'Chennai'>",
+        "destination": "<string, e.g. 'Pondicherry'>",
+        "outboundDate": "<YYYY-MM-DD, e.g. '2025-10-10'>",
+        "returnDate": "<YYYY-MM-DD, e.g. '2025-10-11'>",
+        "createdAt": "<ISO timestamp, e.g. '2025-09-14T00:00:00.000Z'>"
+      },
+      "legs": {
+        "outbound": {
+          "label": "<string, e.g. 'Outbound (Chennai → Pondicherry)'>",
+          "transport": {
+            "bus": {
+              "type": "bus",
+              "label": "Bus Transport",
+              "options": [
+                {
+                  "id": "<string, e.g. 'bus-01'>",
+                  "operator": "<string, e.g. 'GreenLine Coaches'>",
+                  "departureTime": "<HH:MM>",
+                  "arrivalTime": "<HH:MM>",
+                  "durationMinutes": "<int, e.g. 150>",
+                  "price": "<int, e.g. 600>",
+                  "seatsAvailable": "<int, e.g. 12>",
+                  "class": "<string, e.g. 'Sleeper'>",
+                  "notes": "<string or empty>",
+                  "recommended": "<boolean>"
+                }
+              ]
+            },
+            "train": {
+              "type": "train",
+              "label": "Train Transport",
+              "options": [
+                {
+                  "id": "<string, e.g. 'train-01'>",
+                  "operator": "<string, e.g. 'Indian Railways'>",
+                  "trainNumber": "<string, e.g. '12656'>",
+                  "departureTime": "<HH:MM>",
+                  "arrivalTime": "<HH:MM>",
+                  "durationMinutes": "<int>",
+                  "price": "<int>",
+                  "class": "<string, e.g. '3A'>",
+                  "berthsAvailable": "<int>",
+                  "recommended": "<boolean>",
+                  "notes": "<string or empty>"
+                }
+              ]
+            },
+            "flight": {
+              "type": "flight",
+              "label": "Flight Transport",
+              "options": [
+                {
+                  "id": "<string, e.g. 'flight-01'>",
+                  "airline": "<string, e.g. 'Air India'>",
+                  "flightNumber": "<string, e.g. 'AI-123'>",
+                  "departureTime": "<HH:MM or empty>",
+                  "arrivalTime": "<HH:MM or empty>",
+                  "durationMinutes": "<int>",
+                  "price": "<int>",
+                  "stops": "<int, e.g. 0>",
+                  "seatsAvailable": "<int>",
+                  "cabin": "<string, e.g. 'Economy'>",
+                  "recommended": "<boolean>",
+                  "notes": "<string or empty>"
+                }
+              ]
+            },
+            "own": {
+              "type": "own",
+              "label": "Own Transport",
+              "options": [
+                {
+                  "id": "<string, e.g. 'own-01'>",
+                  "distanceKm": "<int, e.g. 165>",
+                  "estimatedDurationMinutes": "<int, e.g. 180>",
+                  "basePerKmRate": "<int, e.g. 12>",
+                  "estimatedFuelCost": "<int, e.g. 1980>",
+                  "tollsApprox": "<int, e.g. 100>",
+                  "price": "<int, e.g. 2080>",
+                  "recommended": "<boolean>",
+                  "notes": "<string or empty>"
+                }
+              ]
+            }
+          },
+          "recommended": {
+            "type": "<string, e.g. 'train'>",
+            "optionId": "<string, e.g. 'train-01'>"
+          }
+        },
+        "return": {
+          "label": "<string, e.g. 'Return (Pondicherry → Chennai)'>",
+          "transport": {
+            "bus": { "type": "bus", "label": "Bus Transport", "options": [] },
+            "train": { "type": "train", "label": "Train Transport", "options": [] },
+            "flight": { "type": "flight", "label": "Flight Transport", "options": [] },
+            "own": { "type": "own", "label": "Own Transport", "options": [] }
+          },
+          "recommended": {
+            "type": "<string, e.g. 'flight'>",
+            "optionId": "<string, e.g. 'flight-02'>"
+          }
+        }
+      }
+    },
+  
+    "accommodationDoc": {
+      "hotels": [
+        {
+          "id": "<string, e.g. 'h-01'>",
+          "name": "<string, e.g. 'Ocean View Resort'>",
+          "address": "<string>",
+          "photos": ["<url>", "<url>"],
+          "pricePerNight": "<int, e.g. 3500>",
+          "rating": "<float, e.g. 4.6>",
+          "checkInTime": "<HH:MM>",
+          "checkOutTime": "<HH:MM>",
+          "available": "<boolean>",
+          "recommended": "<boolean>",
+          "reviews": ["<string>", "<string>"]
+        }
+      ]
+    }
+  }
+  

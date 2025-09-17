@@ -1,0 +1,17 @@
+{
+  "inputJson": {
+    "departure": "<string, e.g. 'Chennai'>",
+    "destination": "<string, e.g. 'Pondicherry'>",
+    "startDate": "<YYYY-MM-DD, e.g. '2025-10-10'>",
+    "endDate": "<YYYY-MM-DD, e.g. '2025-10-11'>",
+    "budget": "<int, e.g. 15000>",
+    "members": {
+      "adults": "<int, e.g. 2>",
+      "children": "<int, e.g. 0>"
+    },
+    "activities": ["<string, e.g. 'Sightseeing'>", "<string, e.g. 'Food'>"],
+    "tripTheme": "<string, e.g. 'Heritage'>",
+    "specialInstructions": "<string, e.g. 'Prefer coastal views and vegetarian meals'>",
+    "createdAt": "<ISO timestamp, e.g. '2025-09-14T00:00:00.000Z'>"
+  }
+}

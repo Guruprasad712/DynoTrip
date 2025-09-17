@@ -26,7 +26,7 @@ class FirestoreClient:
         Fetch travel options from Firestore based on origin, destination, and departure date.
         """
         base = (
-            self.db.collection("travel")
+            self.db.collection("travel-collection")
             .where(filter=FieldFilter("from", "==", from_city))
             .where(filter=FieldFilter("to", "==", to_city))
         )
@@ -105,7 +105,7 @@ class FirestoreClient:
         Fetch accommodation options from Firestore based on city.
         """
         docs = (
-            self.db.collection("accommodation")
+            self.db.collection("accommodation-collection")
             .where(filter=FieldFilter("city", "==", city))
             .stream()
         )
