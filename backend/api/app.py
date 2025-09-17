@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any, Dict
+import logging
 import os
 import json
 import asyncio
@@ -71,6 +72,7 @@ def _normalize_selections(sel: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 app = FastAPI(title="DynoTrip API", version="1.0.0")
+logger = logging.getLogger("dynotrip.api")
 
 # CORS: allow local dev frontends
 app.add_middleware(
@@ -115,7 +117,9 @@ async def travel_stay_endpoint(body: Dict[str, Any]):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = str(e) or "Internal error while generating travel and stay"
+        logger.exception("/travel-stay failed: %s", msg)
+        raise HTTPException(status_code=500, detail=msg)
 
 @app.post("/itinerary-from-selections")
 async def itinerary_from_selections_endpoint(body: Dict[str, Any]):
@@ -144,8 +148,15 @@ async def itinerary_from_selections_endpoint(body: Dict[str, Any]):
         return result
     except HTTPException:
         raise
+    except ValueError as ve:
+        # Typically from parse_json_response when model returns empty/malformed content
+        msg = str(ve) or "Upstream model returned empty or invalid JSON"
+        logger.warning("/itinerary-from-selections bad upstream JSON: %s", msg)
+        raise HTTPException(status_code=502, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = str(e) or "Internal error while generating itinerary from selections"
+        logger.exception("/itinerary-from-selections failed: %s", msg)
+        raise HTTPException(status_code=500, detail=msg)
 
 @app.post("/itinerary")
 async def itinerary_endpoint(body: Dict[str, Any]):
@@ -165,5 +176,11 @@ async def itinerary_endpoint(body: Dict[str, Any]):
         return result
     except HTTPException:
         raise
+    except ValueError as ve:
+        msg = str(ve) or "Upstream model returned empty or invalid JSON"
+        logger.warning("/itinerary bad upstream JSON: %s", msg)
+        raise HTTPException(status_code=502, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = str(e) or "Internal error while generating itinerary"
+        logger.exception("/itinerary failed: %s", msg)
+        raise HTTPException(status_code=500, detail=msg)

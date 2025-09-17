@@ -87,12 +87,21 @@ def parse_json_response(resp) -> Dict[str, Any]:
     text = extract_all_text(resp)
     if not isinstance(text, str):
         text = str(text or "")
-    start = text.find('{')
-    end = text.rfind('}')
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("LLM returned empty response text")
+    start = stripped.find('{')
+    end = stripped.rfind('}')
     if start != -1 and end != -1 and end > start:
-        return json.loads(text[start:end+1])
+        try:
+            return json.loads(stripped[start:end+1])
+        except Exception as e:
+            raise ValueError(f"LLM returned non-JSON or malformed JSON object: {str(e)} | Snippet: {stripped[:200]}")
     # As last resort, try direct json
-    return json.loads(text)
+    try:
+        return json.loads(stripped)
+    except Exception as e:
+        raise ValueError(f"LLM returned non-JSON content: {str(e)} | Snippet: {stripped[:200]}")
 
 
 def llm_json_with_tools(prompt: str, response_schema: Any = None, timeout: int = 300) -> Dict[str, Any]:
