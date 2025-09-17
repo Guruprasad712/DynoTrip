@@ -14,7 +14,8 @@ firestore_client = FirestoreClient(credentials_path=os.getenv("GOOGLE_APPLICATIO
 @mcp.tool
 def get_travel_options(frm: str, to: str, depart_date: str | None = None):
     """Fetch travel options from Firestore."""
-    return firestore_client.get_travel_options(frm, to, depart_date)
+    # Ignore depart_date filter to support static/cabs data from travel-collection
+    return firestore_client.get_travel_options(frm, to, None)
 
 @mcp.tool
 def get_accommodation(city: str):

@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\Admin\OneDrive\Desktop\GenAI_google_hackathon\MCP_working_setup\DynoTrip\.venv
+set VIRTUAL_ENV=C:\Users\Admin\OneDrive\Desktop\GenAI_google_hackathon\backend_proper_template\DynoTrip\.venv
 
 if not defined PROMPT set PROMPT=$P$G
 
