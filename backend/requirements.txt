@@ -1,0 +1,22 @@
+# Google Cloud Firestore
+google-cloud-firestore>=2.14.0
+
+# MCP / Google Travel Agent Toolbox (for MCP tools server)
+google-adk>=0.3.0
+fastmcp>=0.3.6
+uvicorn[standard]>=0.30.0
+fastapi>=0.112.0
+starlette>=0.38.2
+
+# Gemini / Vertex AI via google-genai
+google-genai>=0.3.0
+
+# HTTP clients
+requests>=2.31.0
+aiohttp>=3.10.5
+
+# Environment variables
+python-dotenv>=1.0.1
+
+# Schemas
+pydantic>=2.7.0
