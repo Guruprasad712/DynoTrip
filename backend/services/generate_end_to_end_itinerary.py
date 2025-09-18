@@ -51,7 +51,6 @@ async def generate_end_to_end_itinerary(prev_plan: Dict[str, Any]) -> Dict[str, 
             parsed = parse_json_response(resp)
             try:
                 if isinstance(parsed, dict):
-                    # Blank out specialInstructions wherever it appears
                     if 'specialInstructions' in parsed:
                         parsed['specialInstructions'] = ""
                     gp = parsed.get('generatedPlan') if isinstance(parsed.get('generatedPlan'), dict) else None
