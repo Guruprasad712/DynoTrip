@@ -1,0 +1,46 @@
+# Root gitignore for DynoTrip hackathon submission
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+backend/venv/
+
+# Node / Next.js
+node_modules/
+.next/
+.turbo/
+coverage/
+dist/
+build/
+
+# Env files (do not submit real secrets)
+.env
+.env.*
+backend/.env
+frontend/.env*
+
+# Keys and credentials (never commit)
+keys/
+backend/keys/*
+backend/keys/**/*.json
+*.pem
+*.key
+*.crt
+
+# Misc
+*.swp
+*.swo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
