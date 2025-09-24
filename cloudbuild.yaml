@@ -55,3 +55,6 @@ steps:
       '--update-secrets', '/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest',
       '--update-env-vars', 'MCP_SERVER_URL=$MCP_URL,VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
     ]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
