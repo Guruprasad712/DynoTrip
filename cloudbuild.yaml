@@ -1,3 +1,15 @@
+# Add this at the top of the file, before the steps
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: dynotrip
+  _API_SERVICE: dynotrip-api
+  _MCP_SERVICE: dynotrip-mcp
+
+# Keep your existing options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+
 steps:
   # Build MCP Service
   - name: 'gcr.io/cloud-builders/docker'
@@ -22,7 +34,7 @@ steps:
       '--update-env-vars', 'GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
     ]
 
-  # Get MCP Service URL
+  # Get MCP Service URL and store it in a file for the next steps
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'get-mcp-url'
     entrypoint: 'bash'
@@ -31,7 +43,8 @@ steps:
       - |
         MCP_URL=$(gcloud run services describe ${_MCP_SERVICE} --region ${_REGION} --format 'value(status.url)')
         echo "MCP Service URL: $MCP_URL"
-        echo "MCP_SERVER_URL=$MCP_URL" >> /workspace/.env
+        # Store the URL in a file that can be read by subsequent steps
+        echo "${MCP_URL}" > /workspace/mcp-url.txt
 
   # Build API Service
   - name: 'gcr.io/cloud-builders/docker'
@@ -53,8 +66,6 @@ steps:
       '--port', '8080',
       '--set-secrets', 'GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest',
       '--update-secrets', '/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest',
-      '--update-env-vars', 'MCP_SERVER_URL=$MCP_URL,VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
+      '--update-env-vars', 'MCP_SERVER_URL=$(cat /workspace/mcp-url.txt),VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
     ]
 
-options:
-  logging: CLOUD_LOGGING_ONLY
