@@ -1,91 +1,57 @@
-# Cloud Build config to build and deploy DynoTrip backend to Cloud Run
-# - Builds two images: API (FastAPI) and MCP (tools server)
-# - Deploys MCP first, fetches its URL, then deploys API with MCP_SERVER_URL
-#
-# Prereqs (run once):
-# - Enable APIs: gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
-# - Create Artifact Registry repo: gcloud artifacts repositories create ${_AR_REPO} --repository-format=docker --location=${_REGION}
-# - Create a Cloud Build trigger connected to your GitHub repo and set substitutions as needed.
-
-substitutions:
-  _REGION: us-central1
-  _AR_REPO: dynotrip
-  _API_SERVICE: dynotrip-api
-  _MCP_SERVICE: dynotrip-mcp
-  _GOOGLE_MAPS_API_KEY: ""
-  _GEMINI_API_KEY: ""
-  _VERTEX_AI_LOCATION: us-central1
-  _VERTEX_AI_MODEL: gemini-2.5-flash
-
-options:
-  logging: CLOUD_LOGGING_ONLY
-
-images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA
-
 steps:
-  # Build MCP image
-  - name: gcr.io/cloud-builders/docker
-    id: build-mcp
+  # Build MCP Service
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA', '-f', 'backend/Dockerfile.mcp', '.']
+    id: 'build-mcp'
+
+  # Push MCP Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA']
+
+  # Deploy MCP Service
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'deploy', '${_MCP_SERVICE}',
+      '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA',
+      '--region', '${_REGION}',
+      '--allow-unauthenticated',
+      '--platform', 'managed',
+      '--port', '8080',
+      '--set-secrets', 'GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest',
+      '--update-secrets', '/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest',
+      '--update-env-vars', 'GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
+    ]
+
+  # Get MCP Service URL
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'get-mcp-url'
+    entrypoint: 'bash'
     args:
-      - build
-      - -f
-      - backend/Dockerfile.mcp
-      - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA
-      - .
-
-  # Build API image
-  - name: gcr.io/cloud-builders/docker
-    id: build-api
-    args:
-      - build
-      - -f
-      - backend/Dockerfile.api
-      - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA
-      - .
-
-  # Push images
-  - name: gcr.io/cloud-builders/docker
-    id: push-mcp
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA"]
-
-  - name: gcr.io/cloud-builders/docker
-    id: push-api
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA"]
-
-  # Deploy MCP first
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    id: deploy-mcp
-    entrypoint: bash
-    args:
-      - -c
+      - '-c'
       - |
-        set -euo pipefail
-        gcloud run deploy ${_MCP_SERVICE} \
-          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA \
-          --region ${_REGION} \
-          --allow-unauthenticated \
-          --platform managed \
-          --port 8080 \
-          --update-env-vars=GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY}
+        MCP_URL=$(gcloud run services describe ${_MCP_SERVICE} --region ${_REGION} --format 'value(status.url)')
+        echo "MCP Service URL: $MCP_URL"
+        echo "MCP_SERVER_URL=$MCP_URL" >> /workspace/.env
 
-  # Read MCP URL and deploy API with MCP_SERVER_URL pointing to it
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    id: deploy-api
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        MCP_URL=$(gcloud run services describe ${_MCP_SERVICE} --region ${_REGION} --format='value(status.url)')
-        echo "MCP_URL=$MCP_URL"
-        gcloud run deploy ${_API_SERVICE} \
-          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA \
-          --region ${_REGION} \
-          --allow-unauthenticated \
-          --platform managed \
-          --port 8080 \
-          --update-env-vars=MCP_SERVER_URL=${MCP_URL}/mcp,GEMINI_API_KEY=${_GEMINI_API_KEY},VERTEX_AI_LOCATION=${_VERTEX_AI_LOCATION},VERTEX_AI_MODEL=${_VERTEX_AI_MODEL}
+  # Build API Service
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA', '-f', 'backend/Dockerfile.api', '--build-arg', 'GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json', '.']
+    id: 'build-api'
+
+  # Push API Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA']
+
+  # Deploy API Service
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'deploy', '${_API_SERVICE}',
+      '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA',
+      '--region', '${_REGION}',
+      '--allow-unauthenticated',
+      '--platform', 'managed',
+      '--port', '8080',
+      '--set-secrets', 'GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest',
+      '--update-secrets', '/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest',
+      '--update-env-vars', 'MCP_SERVER_URL=$MCP_URL,VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json'
+    ]
