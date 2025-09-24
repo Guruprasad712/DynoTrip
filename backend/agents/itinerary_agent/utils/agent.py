@@ -3,6 +3,9 @@ from firestore_client import FirestoreClient
 import os
 import requests
 from datetime import datetime
+from dotenv import load_dotenv 
+
+load_dotenv()
 
 # Prefer built-in stateless HTTP mode if available in this fastmcp version
 mcp = FastMCP(name="Travel MCP Server")
@@ -220,8 +223,6 @@ def compute_route(origin: str, destination: str, intermediates: list[str] | None
         return {"error": str(e)}
 
 if __name__ == "__main__":
-   
-    #import asyncio
-
-    #asyncio.run(mcp.run_async())
-    mcp.run(transport="http", host="127.0.0.1", port=9000)
+    # Cloud Run: listen on 0.0.0.0 and PORT (default 8080)
+    port = int(os.getenv("PORT", "8080"))
+    mcp.run(transport="http", host="0.0.0.0", port=port)

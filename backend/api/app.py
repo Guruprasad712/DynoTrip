@@ -86,6 +86,19 @@ app.add_middleware(
 class Payload(BaseModel):
     payload: Dict[str, Any]
 
+@app.get("/")
+async def root():
+    return {
+        "service": "DynoTrip API",
+        "status": "ok",
+        "endpoints": [
+            "/health",
+            "/travel-stay",
+            "/itinerary-from-selections",
+            "/itinerary",
+        ],
+    }
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

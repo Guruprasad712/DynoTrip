@@ -1,0 +1,31 @@
+# DynoTrip MCP Tools Server - Cloud Run
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps (optional)
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
+
+# Copy only what MCP needs
+# Keep relative imports working by setting WORKDIR later
+COPY backend/agents/ ./agents/
+
+# Default port for Cloud Run
+ENV PORT=8080
+
+# Run from utils directory so `from firestore_client import FirestoreClient` works
+WORKDIR /app/agents/itinerary_agent/utils
+
+# Start MCP HTTP server on 0.0.0.0:$PORT (agent.py respects PORT)
+CMD ["python", "agent.py"]

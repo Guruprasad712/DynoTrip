@@ -1,0 +1,28 @@
+# DynoTrip Backend API - Cloud Run
+FROM python:3.11-slim
+
+# Prevents Python from buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps (optional; keep slim)
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
+
+# Copy API code only
+COPY backend/ ./
+
+# Expose Cloud Run port
+ENV PORT=8080
+
+# Start FastAPI via Uvicorn on 0.0.0.0:$PORT
+CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080"]
