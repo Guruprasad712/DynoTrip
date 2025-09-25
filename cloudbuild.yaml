@@ -90,7 +90,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA']
 
-  # Deploy API Service (with MCP URL from file)
+    # Deploy API Service (with MCP URL from file)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'deploy-api'
     entrypoint: 'bash'
