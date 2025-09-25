@@ -1,3 +1,4 @@
+# Substitutions - can be overridden when triggering the build
 substitutions:
   _REGION: us-central1
   _AR_REPO: dynotrip
@@ -12,16 +13,18 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     id: build-mcp
     args:
-      - 'build'
-      - '-t'
+      - build
+      - -t
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
-      - '-f'
-      - 'backend/Dockerfile.mcp'
-      - '.'
+      - -f
+      - backend/Dockerfile.mcp
+      - .
 
   # Push MCP Image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA']
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
 
   # Deploy MCP Service
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -30,7 +33,7 @@ steps:
       - deploy
       - ${_MCP_SERVICE}
       - --image
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
       - --region
       - ${_REGION}
       - --allow-unauthenticated
@@ -58,10 +61,10 @@ steps:
         echo "MCP Service URL: $MCP_URL"
 
         for i in {1..30}; do
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" $MCP_URL/ || true)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$MCP_URL/" || true)
           if [ "$STATUS" -eq 200 ]; then
             echo "MCP service is ready!"
-            echo $MCP_URL > /workspace/mcp_url.txt
+            echo "$MCP_URL" > /workspace/mcp_url.txt
             exit 0
           fi
           echo "Still waiting... (attempt $i, status=$STATUS)"
@@ -74,7 +77,7 @@ steps:
   # Build API Service
   - name: 'gcr.io/cloud-builders/docker'
     id: build-api
-    args: 
+    args:
       - build
       - -t
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA'
@@ -86,7 +89,9 @@ steps:
 
   # Push API Image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA']
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA'
 
   # Deploy API Service (inject MCP_URL from file)
   - name: 'gcr.io/cloud-builders/gcloud'
