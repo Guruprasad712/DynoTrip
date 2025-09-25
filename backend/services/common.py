@@ -19,16 +19,24 @@ logging.getLogger("google.genai").setLevel(logging.ERROR)
 logging.getLogger("fastmcp").setLevel(logging.ERROR)
 
 # Create a reusable MCP client (HTTP preferred)
-def get_mcp_client() -> Optional[Client]:
-    mcp_client = None
-    url = os.getenv("MCP_SERVER_URL")
-    if url and StreamableHttpTransport is not None:
-        try:
-            transport = StreamableHttpTransport(url=url)
-            mcp_client = Client(transport=transport)
-        except Exception:
-            mcp_client = None
-    return mcp_client
+def get_mcp_client() -> Client:
+    """Get a configured MCP client.
+    
+    Raises:
+        RuntimeError: If MCP_SERVER_URL is not set or client cannot be created
+    """
+    mcp_url = os.getenv("MCP_SERVER_URL")
+    if not mcp_url:
+        raise RuntimeError("MCP_SERVER_URL environment variable is not set")
+    
+    if StreamableHttpTransport is None:
+        raise RuntimeError("StreamableHttpTransport is not available")
+    
+    try:
+        transport = StreamableHttpTransport(url=mcp_url)
+        return Client(transport=transport)
+    except Exception as e:
+        raise RuntimeError(f"Failed to create MCP client: {str(e)}")
 
 # Create a reusable Gemini client
 # Prefer API key when available; otherwise fall back to Vertex AI (ADC)

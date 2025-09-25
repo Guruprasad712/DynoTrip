@@ -38,6 +38,25 @@ Optionally wire itinerary endpoints by modifying the mock API routes to proxy to
 - `POST /itinerary-from-selections`
 - `POST /itinerary`
 
+## Environment Variables
+
+### Required for Production (Cloud Run)
+- `MCP_SERVER_URL`: The URL of the MCP service (injected via Secret Manager)
+- `GEMINI_API_KEY` or `VERTEX_API_KEY`: For Gemini/Vertex AI access
+- `PROJECT_ID`: Google Cloud Project ID
+- `VERTEX_AI_LOCATION`: Region for Vertex AI (e.g., us-central1)
+- `VERTEX_AI_MODEL`: (Optional) Defaults to "gemini-2.5-flash"
+
+### Local Development
+Create a `.env` file in the `backend` directory with:
+```
+MCP_SERVER_URL=http://localhost:9000/mcp  # Or your MCP service URL
+GEMINI_API_KEY=your-api-key  # Or use VERTEX_API_KEY for Vertex AI
+PROJECT_ID=your-project-id
+VERTEX_AI_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=path/to/your/credentials.json
+```
+
 ## Security & Submission Notes
 - Do NOT commit secrets. Replace real env files with examples:
   - Backend: `backend/env.example` → copy to `.env` locally
