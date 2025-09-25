@@ -3,6 +3,7 @@ substitutions:
   _AR_REPO: dynotrip
   _API_SERVICE: dynotrip-api
   _MCP_SERVICE: dynotrip-mcp
+  _MCP_URL_SECRET: MCP_URL_SECRET  # Name of the secret in Secret Manager
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -60,7 +61,6 @@ steps:
           --allow-unauthenticated \
           --platform managed \
           --port 8080 \
-          --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest \
-          --update-secrets /secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest \
-          --set-env-vars "MCP_SERVER_URL=$MCP_URL" \
+          --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest,MCP_SERVER_URL=${_MCP_URL_SECRET}:latest" \
+          --update-secrets "/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest" \
           --update-env-vars "VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json"
