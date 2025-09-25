@@ -10,37 +10,37 @@ options:
 
 steps:
   # Build MCP Service
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: gcr.io/cloud-builders/docker
     id: build-mcp
     args:
       - build
       - -t
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA"
       - -f
       - backend/Dockerfile.mcp
       - .
 
   # Push MCP Image
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA"
 
   # Deploy MCP Service
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - name: gcr.io/cloud-builders/gcloud
     args:
       - run
       - deploy
       - ${_MCP_SERVICE}
       - --image
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA'
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_MCP_SERVICE}:$COMMIT_SHA"
       - --region
       - ${_REGION}
       - --allow-unauthenticated
       - --platform
       - managed
       - --port
-      - '8080'
+      - "8080"
       - --set-secrets
       - GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest
       - --update-secrets
@@ -49,14 +49,13 @@ steps:
       - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json
 
   # Wait for MCP service to be healthy
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - name: gcr.io/cloud-builders/gcloud
     id: wait-for-mcp
     entrypoint: bash
     args:
       - -c
       - |
         echo "Waiting for MCP service to be ready..."
-
         MCP_URL=$(gcloud run services describe ${_MCP_SERVICE} --region ${_REGION} --format 'value(status.url)')
         echo "MCP Service URL: $MCP_URL"
 
@@ -75,12 +74,12 @@ steps:
         exit 1
 
   # Build API Service
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: gcr.io/cloud-builders/docker
     id: build-api
     args:
       - build
       - -t
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA'
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA"
       - -f
       - backend/Dockerfile.api
       - --build-arg
@@ -88,28 +87,28 @@ steps:
       - .
 
   # Push API Image
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA'
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA"
 
-  # Deploy API Service (inject MCP_URL from file)
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Deploy API Service dynamically with MCP_URL
+  - name: gcr.io/cloud-builders/gcloud
     id: deploy-api
     entrypoint: bash
     args:
       - -c
       - |
         MCP_URL=$(cat /workspace/mcp_url.txt)
-        echo "Injecting MCP URL into API: $MCP_URL"
+        echo "Deploying API with MCP URL: $MCP_URL"
 
         gcloud run deploy ${_API_SERVICE} \
-          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA \
+          --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_API_SERVICE}:$COMMIT_SHA" \
           --region ${_REGION} \
           --allow-unauthenticated \
           --platform managed \
           --port 8080 \
-          --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest \
-          --update-secrets /secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest \
-          --set-env-vars MCP_SERVER_URL=$MCP_URL \
-          --update-env-vars VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json
+          --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest" \
+          --update-secrets "/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest" \
+          --set-env-vars "MCP_SERVER_URL=$MCP_URL" \
+          --update-env-vars "VERTEX_AI_LOCATION=${_REGION},GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json"
