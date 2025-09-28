@@ -1,0 +1,30 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps (supervisor to run multiple processes)
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    build-essential supervisor \
+  && rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
+
+# Copy backend code
+COPY backend/ ./
+
+# Supervisord config
+COPY backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Cloud Run will route to $PORT; we expose API on 8080, MCP on 8081
+ENV PORT=8080
+EXPOSE 8080
+
+# Start both MCP (on 8081) and FastAPI (on 8080)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
