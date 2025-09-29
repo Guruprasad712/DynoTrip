@@ -1,6 +1,14 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 
+substitutions:
+  _MCP_SERVER_URL: "http://127.0.0.1:8081"  # Override per-env/trigger
+  _VERTEX_AI_LOCATION: "us-central1"        # Override if needed
+  _VERTEX_AI_MODEL: "gemini-2.5-flash"      # Optional model override
+  _GEMINI_API_KEY: ""                       # Provide via trigger if using Gemini API key
+  _VERTEX_API_KEY: ""                       # Provide via trigger if using Vertex API key
+  _GOOGLE_MAPS_API_KEY: ""                  # Provide via trigger
+
 steps:
   # Build unified backend image from Dockerfile.all
   - name: gcr.io/cloud-builders/docker
@@ -33,9 +41,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=8080
-      - --set-env-vars=MCP_SERVER_URL=http://127.0.0.1:8081,VERTEX_AI_LOCATION=us-central1,GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json
-      - --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest,VERTEX_API_KEY=VERTEX_API_KEY:latest,PROJECT_ID=PROJECT_ID:latest,VERTEX_AI_MODEL=VERTEX_AI_MODEL:latest,GOOGLE_MAPS_API_KEY=GOOGLE_MAPS_API_KEY:latest
-      - --update-secrets=/secrets/gcp-credentials.json=GOOGLE_APPLICATION_CREDENTIALS:latest
+      - --set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
