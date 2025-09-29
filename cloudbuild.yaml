@@ -8,6 +8,7 @@ substitutions:
   _GEMINI_API_KEY: ""                       # Provide via trigger if using Gemini API key
   _VERTEX_API_KEY: ""                       # Provide via trigger if using Vertex API key
   _GOOGLE_MAPS_API_KEY: ""                  # Provide via trigger
+  _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"  # Runtime SA used by Cloud Run
 
 steps:
   # Build unified backend image from Dockerfile.all
@@ -39,6 +40,7 @@ steps:
       - --image=us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
       - --region=us-central1
       - --platform=managed
+      - --service-account=$_RUNTIME_SERVICE_ACCOUNT
       - --allow-unauthenticated
       - --port=8080
       - --set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY
