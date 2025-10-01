@@ -2,7 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _MCP_SERVER_URL: "http://127.0.0.1:8081"  # Override per-env/trigger
+  _MCP_SERVER_URL: "http://127.0.0.1:8081/mcp"  # FastMCP HTTP endpoint requires /mcp; override per-env/trigger
   _VERTEX_AI_LOCATION: "us-central1"        # Override if needed
   _VERTEX_AI_MODEL: "gemini-2.5-flash"      # Optional model override
   _GEMINI_API_KEY: ""                       # Provide via trigger if using Gemini API key
