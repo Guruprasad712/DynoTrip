@@ -14,6 +14,7 @@ import {
   Divider,
 } from '@mui/material';
 import { FlightTakeoff, Hotel as HotelIcon, CalendarMonth, MonetizationOn, Download, Place as PlaceIcon } from '@mui/icons-material';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { useTrip } from '../context/TripContext';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -270,8 +271,48 @@ export default function PreviewPage() {
           <Stack direction="row" spacing={1} alignItems="center">
             <Chip icon={<CalendarMonth />} label={`${days?.length ?? 0} day(s)`} />
             <Chip icon={<MonetizationOn />} label={`Est. ₹${totalCost}`} color="primary" />
-            <Button startIcon={<Download />} variant="contained" onClick={downloadPdf}>
+            <Button startIcon={<Download />} variant="contained" onClick={downloadPdf} sx={{ mr: 1 }}>
               Download PDF
+            </Button>
+            <Button 
+              startIcon={<WhatsAppIcon />} 
+              variant="outlined" 
+              color="success"
+              onClick={() => {
+                try {
+                  const message = 'Hey! Check out my trip itinerary — I just planned an amazing journey!';
+                  const url = window.location.origin + '/dashboard/itinerary';
+                  const shareUrl = `https://wa.me/?text=${encodeURIComponent(`${message}\n\nView it here: ${url}`)}`;
+                  
+                  // Try to open WhatsApp in a new tab
+                  const newWindow = window.open(shareUrl, '_blank', 'noopener,noreferrer');
+                  
+                  // If popup was blocked, show a message to the user
+                  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // Fallback: Copy to clipboard
+                    navigator.clipboard.writeText(`${message}\n\n${url}`).then(() => {
+                      alert('Link copied to clipboard! You can now paste it in WhatsApp.');
+                    }).catch(() => {
+                      // If clipboard fails, just show the URL
+                      alert(`Could not open WhatsApp. Please copy this link manually:\n\n${url}`);
+                    });
+                  }
+                } catch (error) {
+                  console.error('Error sharing to WhatsApp:', error);
+                  alert('Could not open WhatsApp. Please try again or copy the URL manually.');
+                }
+              }}
+              sx={{ 
+                color: '#25D366',
+                borderColor: '#25D366',
+                '&:hover': {
+                  borderColor: '#1da851',
+                  backgroundColor: 'rgba(37, 211, 102, 0.04)'
+                },
+                minWidth: '120px'
+              }}
+            >
+              Share on WhatsApp
             </Button>
           </Stack>
         </Stack>
