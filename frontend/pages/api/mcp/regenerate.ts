@@ -16,5 +16,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     gp.hiddenGems = gp.hiddenGems ?? [];
     gp.hiddenGems.push({ id: `hg-auto-${Date.now()}`, title: 'Auto-added lookout', description: 'A scenic lookout added by AI.', photos: [], rating: 4.5 });
   }
+  // Ensure each place item has a weather object (mocked) to align with backend shape
+  try {
+    const days = gp.storyItinerary || [];
+    for (const d of days) {
+      const date = d?.date ?? new Date().toISOString().slice(0,10);
+      if (!Array.isArray(d.items)) continue;
+      for (const it of d.items) {
+        if (it && !it.__isMeal) {
+          // If weather already present, keep; otherwise mock a realistic value or 'not available'
+          if (!it.weather) {
+            // Simple deterministic mock: alternate Sunny/Rainy by hash of title
+            const h = (it.title || '').length;
+            const cond = (h % 2) === 0 ? 'Sunny' : 'Rainy';
+            it.weather = { temperature: cond === 'Sunny' ? 30 : 24, condition: cond };
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
   return res.status(200).json({ generatedPlan: gp });
 }

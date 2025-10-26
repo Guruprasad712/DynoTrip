@@ -22,6 +22,10 @@
             },
             {
               "id": "place-<location_code>-<NN> (eg: place-pond-1)",
+              "weather": {
+                "temperature": "<numeric_temperature> (eg: 30)",
+                "condition": "<weather_condition> (eg: Sunny)"
+              },
               "title": "<place_name> (eg: Promenade Beach)",
               "description": "<place_description> (eg: Walk the shoreline and take photos.)",
               "photos": ["<image_url> (eg: https://images.unsplash.com/...)"],
