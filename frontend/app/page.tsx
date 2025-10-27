@@ -43,11 +43,20 @@ export default function Page() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [budget, setBudget] = useState<number>(15000);
-  const [adults, setAdults] = useState<number>(2);
+  const [adults, setAdults] = useState<number>(1); // Default to minimum 1 adult
   const [children, setChildren] = useState<number>(0);
   const [activities, setActivities] = useState<string[]>([]);
   const [tripTheme, setTripTheme] = useState<string>('');
   const [specialInstructions, setSpecialInstructions] = useState<string>('');
+  
+  // Error states
+  const [errors, setErrors] = useState<{
+    departure?: string;
+    destination?: string;
+    startDate?: string;
+    endDate?: string;
+    adults?: string;
+  }>({});
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [allowProceedSeed, setAllowProceedSeed] = useState(false);
@@ -97,25 +106,66 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function buildInputObject() {
-    return {
-      departure: departure || null,
-      destination: destination || null,
-      startDate: startDate || null,
-      endDate: endDate || null,
+  const validateForm = () => {
+    const newErrors: typeof errors = {};
+
+    if (!departure.trim()) newErrors.departure = 'Departure city is required';
+    if (!destination.trim()) newErrors.destination = 'Destination is required';
+    if (!startDate) newErrors.startDate = 'Start date is required';
+    if (!endDate) newErrors.endDate = 'End date is required';
+    if (adults < 1) newErrors.adults = 'At least 1 adult is required';
+
+    // Validate end date is after start date
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      newErrors.endDate = 'End date must be after start date';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return; // Don't proceed if validation fails
+    }
+
+    const inputJson = {
+      departure,
+      destination,
+      startDate,
+      endDate,
       budget,
-      members: { adults, children },
-      activities,
-      tripTheme,
-      specialInstructions,
-      createdAt: new Date().toISOString(),
+      members: { adults, children: children || undefined },
+      activities: activities.length ? activities : ['Sightseeing'],
+      tripTheme: tripTheme || undefined,
+      specialInstructions: specialInstructions || undefined,
     };
-  }
+
+    setInputJson(inputJson);
+    setMockPlanFromInput(inputJson);
+    router.push('/dashboard/travel');
+  };
 
   async function handlePlanTrip() {
     setErrorMsg(null);
-    const payload = buildInputObject();
-    setInputJson(payload);
+    const payload = {
+      departure,
+      destination,
+      startDate,
+      endDate,
+      budget,
+      members: { adults, children: children || undefined },
+      activities: activities.length ? activities : ['Sightseeing'],
+      tripTheme: tripTheme || undefined,
+      specialInstructions: specialInstructions || undefined,
+    };
+
+    if (!validateForm()) {
+      return; // Don't proceed if validation fails
+    }
+
     setLoading(true);
     try {
       let res = await fetch(MCP_PLAN, {
@@ -229,6 +279,7 @@ export default function Page() {
                     <MenuItem value=""><em>Choose departure</em></MenuItem>
                     {DEPARTURES.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
                   </Select>
+                  {errors.departure && <Typography color="error" sx={{ mt: 1 }}>{errors.departure}</Typography>}
                 </FormControl>
               </Grid>
 
@@ -239,6 +290,7 @@ export default function Page() {
                     <MenuItem value=""><em>Choose destination</em></MenuItem>
                     {DESTINATIONS.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
                   </Select>
+                  {errors.destination && <Typography color="error" sx={{ mt: 1 }}>{errors.destination}</Typography>}
                 </FormControl>
               </Grid>
 
@@ -248,15 +300,22 @@ export default function Page() {
                   <TextField
                     inputRef={startRef}
                     fullWidth
-                    size="small"
-                    type={startType}
-                    placeholder="Select start date"
                     label="Start Date"
-                    InputLabelProps={{ shrink: true }}
+                    type="date"
                     value={startDate}
-                    onFocus={() => setStartType('date')}
-                    onBlur={() => { if (!startDate) setStartType('text'); }}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (errors.startDate) {
+                        setErrors({ ...errors, startDate: undefined });
+                      }
+                    }}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    required
+                    size="small"
+                    error={!!errors.startDate}
+                    helperText={errors.startDate}
                   />
                 </Box>
               </Grid>
@@ -265,15 +324,22 @@ export default function Page() {
                   <TextField
                     inputRef={endRef}
                     fullWidth
-                    size="small"
-                    type={endType}
-                    placeholder="Select end date"
                     label="End Date"
-                    InputLabelProps={{ shrink: true }}
+                    type="date"
                     value={endDate}
-                    onFocus={() => setEndType('date')}
-                    onBlur={() => { if (!endDate) setEndType('text'); }}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      if (errors.endDate) {
+                        setErrors({ ...errors, endDate: undefined });
+                      }
+                    }}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    required
+                    size="small"
+                    error={!!errors.endDate}
+                    helperText={errors.endDate}
                   />
                 </Box>
               </Grid>
@@ -288,7 +354,28 @@ export default function Page() {
               </Grid>
 
               <Grid item xs={6} md={3}>
-                <TextField fullWidth size="small" type="number" label="Adults" value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+                <TextField 
+                  fullWidth 
+                  size="small" 
+                  type="number" 
+                  label="Adults" 
+                  value={adults} 
+                  onChange={(e) => {
+                    const value = Math.max(1, Math.min(99, Number(e.target.value) || 1));
+                    setAdults(value);
+                    if (errors.adults) {
+                      setErrors({ ...errors, adults: undefined });
+                    }
+                  }}
+                  inputProps={{ min: 1, max: 99 }}
+                  error={!!errors.adults}
+                  helperText={errors.adults}
+                  onBlur={() => {
+                    if (adults < 1) {
+                      setAdults(1);
+                    }
+                  }}
+                />
               </Grid>
               <Grid item xs={6} md={3}>
                 <TextField fullWidth size="small" type="number" label="Children" value={children} onChange={(e) => setChildren(Number(e.target.value))} />

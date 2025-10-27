@@ -1,3 +1,30 @@
-:root { --max-w: 1200px; }
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+:root {
+	--max-w: 1200px;
+	/* Theme tokens (based on the attached screenshots) */
+	--color-primary: #1e90ff;    /* bright blue */
+	--color-cta: #ff7a22;        /* orange CTA */
+	--color-accent: #0b72ff;
+	--bg-default: #ffffff;
+	--bg-muted: #f6f9fc;
+	--text-primary: #0b1b2b;
+}
+
 html, body, #__next { height: 100%; margin:0; padding:0; }
-body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+
+body {
+	font-family: 'Poppins', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+	background: var(--bg-default);
+	color: var(--text-primary);
+}
+
+/* Utility tokens so non-MUI components can use the same colors */
+.btn-cta {
+	background-color: var(--color-cta);
+	color: white;
+}
+
+.header-gradient {
+	background: linear-gradient(90deg,#1e90ff 0%,#0b72ff 100%);
+}

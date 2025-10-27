@@ -10,6 +10,8 @@ except Exception:
     StreamableHttpTransport = None  # type: ignore
 
 from google import genai
+import requests
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -135,3 +137,86 @@ def llm_json_with_tools(prompt: str, response_schema: Any = None, timeout: int =
 
     import asyncio
     return asyncio.get_event_loop().run_until_complete(asyncio.wait_for(_run(), timeout=timeout))
+
+
+def geocode_place(address: str, api_key: str | None = None) -> Optional[Dict[str, float]]:
+    """Resolve a freeform address/place name to a (lat, lon) dict using Google Geocoding API.
+    Returns {'lat': float, 'lng': float} or None on failure.
+    """
+    if api_key is None:
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+    if not api_key or not address:
+        return None
+    try:
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get('results') or []
+        if not results:
+            return None
+        loc = results[0].get('geometry', {}).get('location')
+        if not loc:
+            return None
+        return {"lat": float(loc.get('lat')), "lng": float(loc.get('lng'))}
+    except Exception:
+        return None
+
+
+def get_hourly_weather_summary(lat: float, lng: float, days: int = 3, api_key: str | None = None) -> Dict[str, Any]:
+    """Fetch a short daily weather summary for the next `days` days using the Google Weather Hours lookup.
+    Returns a dict keyed by ISO date (YYYY-MM-DD) with simple summary strings like 'Rainy', 'Sunny'.
+    This is intentionally simple: picks the most frequent condition label in the day's hours.
+    """
+    if api_key is None:
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        return {}
+    summaries: Dict[str, Any] = {}
+    try:
+        url = "https://weather.googleapis.com/v1/forecast/hours:lookup"
+        params = {"key": api_key, "location.latitude": lat, "location.longitude": lng}
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        hours = data.get('hours') or []
+        buckets: Dict[str, list] = {}
+        now = datetime.utcnow()
+        for h in hours:
+            ts = h.get('time') or h.get('startTime') or h.get('datetime')
+            try:
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except Exception:
+                continue
+            date_key = dt.date().isoformat()
+            if (dt.date() - now.date()).days >= days:
+                continue
+            buckets.setdefault(date_key, []).append(h)
+
+        for i in range(days):
+            d = (now + timedelta(days=i)).date().isoformat()
+            day_hours = buckets.get(d, [])
+            if not day_hours:
+                summaries[d] = {'summary': 'Unknown', 'detail': None}
+                continue
+            cond_counts: Dict[str, int] = {}
+            temps: list = []
+            for h in day_hours:
+                cond = (h.get('condition') or {}).get('code') or (h.get('condition') or {}).get('text') or 'Unknown'
+                cond_counts[cond] = cond_counts.get(cond, 0) + 1
+                temp = h.get('temperature') or (h.get('temperatureC') if 'temperatureC' in h else None)
+                if temp is not None:
+                    try:
+                        temps.append(float(temp))
+                    except Exception:
+                        pass
+            most = max(cond_counts.items(), key=lambda x: x[1])[0] if cond_counts else 'Unknown'
+            avg_temp = (sum(temps)/len(temps)) if temps else None
+            summaries[d] = {
+                'summary': most,
+                'avg_temp': round(avg_temp,1) if avg_temp is not None else None,
+                'detail_count': len(day_hours),
+            }
+    except Exception:
+        return {}
+    return summaries

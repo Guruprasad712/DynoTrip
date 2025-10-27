@@ -2,7 +2,7 @@ from fastmcp import FastMCP
 from firestore_client import FirestoreClient
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv 
 
 load_dotenv()
@@ -77,6 +77,79 @@ def _places_details(place_id: str, api_key: str):
     _details_cache[place_id] = data
     return data
 
+
+# ---- Minimal geocode + weather helpers (used by place_details) ----
+def _geocode_address(address: str, api_key: str, timeout: int = 8):
+    """Return {'lat': float, 'lng': float} or None"""
+    if not address:
+        return None
+    try:
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get('results') or []
+        if not results:
+            return None
+        loc = results[0].get('geometry', {}).get('location')
+        if not loc:
+            return None
+        return {"lat": float(loc.get('lat')), "lng": float(loc.get('lng'))}
+    except Exception:
+        return None
+
+
+def _fetch_weather_summary(lat: float, lng: float, days: int = 3, api_key: str | None = None):
+    """Return a compact dict of per-day weather summaries or None on failure."""
+    if api_key is None:
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        return None
+    try:
+        url = "https://weather.googleapis.com/v1/forecast/hours:lookup"
+        params = {"key": api_key, "location.latitude": lat, "location.longitude": lng}
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        hours = data.get('hours') or []
+        buckets = {}
+        now = datetime.utcnow()
+        for h in hours:
+            ts = h.get('time') or h.get('startTime') or h.get('datetime')
+            try:
+                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except Exception:
+                continue
+            date_key = dt.date().isoformat()
+            if (dt.date() - now.date()).days >= days:
+                continue
+            buckets.setdefault(date_key, []).append(h)
+
+        summaries = {}
+        for i in range(days):
+            d = (now + timedelta(days=i)).date().isoformat()
+            day_hours = buckets.get(d, [])
+            if not day_hours:
+                summaries[d] = {'summary': 'Unknown', 'avg_temp': None}
+                continue
+            cond_counts = {}
+            temps = []
+            for h in day_hours:
+                cond = (h.get('condition') or {}).get('code') or (h.get('condition') or {}).get('text') or 'Unknown'
+                cond_counts[cond] = cond_counts.get(cond, 0) + 1
+                temp = h.get('temperature') or (h.get('temperatureC') if 'temperatureC' in h else None)
+                if temp is not None:
+                    try:
+                        temps.append(float(temp))
+                    except Exception:
+                        pass
+            most = max(cond_counts.items(), key=lambda x: x[1])[0] if cond_counts else 'Unknown'
+            avg_temp = (sum(temps) / len(temps)) if temps else None
+            summaries[d] = {'summary': most, 'avg_temp': round(avg_temp, 1) if avg_temp is not None else None}
+        return summaries
+    except Exception:
+        return None
+
 @mcp.tool
 def place_details(query: str) -> dict:
     """
@@ -146,81 +219,38 @@ def place_details(query: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
-# ---- Routes API (Directions v2) for waypoint optimization ----
-ROUTES_ENDPOINT = "https://routes.googleapis.com/directions/v2:computeRoutes"
-
-def _place_from_address(addr: str) -> dict:
-    return {"address": addr}
-
-def _compute_routes_api(origin: dict, destination: dict, intermediates: list[dict], api_key: str,
-                        travel_mode: str = "DRIVE", routing_preference: str = "TRAFFIC_AWARE") -> dict:
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": api_key,
-        # Slim field mask for faster responses
-        "X-Goog-FieldMask": ",".join([
-            "routes.distanceMeters",
-            "routes.duration",
-            "routes.legs.distanceMeters",
-            "routes.legs.duration",
-            "routes.optimizedIntermediateWaypointIndex",
-        ]),
-    }
-    payload = {
-        "origin": origin,
-        "destination": destination,
-        "intermediates": intermediates,
-        "travelMode": travel_mode,
-        "routingPreference": routing_preference,
-        "computeAlternativeRoutes": False,
-        "optimizeWaypointOrder": True,
-    }
-    resp = requests.post(ROUTES_ENDPOINT, headers=headers, json=payload, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
-
-@mcp.tool
-def compute_route(origin: str, destination: str, intermediates: list[str] | None = None,
-                  travel_mode: str = "DRIVE", routing_preference: str = "TRAFFIC_AWARE") -> dict:
-    """
-    Optimize waypoint order and return route summary using Google Routes API.
-
-    Args:
-      origin: Origin address string
-      destination: Destination address string
-      intermediates: List of intermediate waypoint address strings
-      travel_mode: DRIVE | BICYCLE | WALK | TWO_WHEELER | TRANSIT
-      routing_preference: TRAFFIC_AWARE | TRAFFIC_AWARE_OPTIMAL | FUEL_EFFICIENT
-
-    Returns:
-      { routes: [...], routes[0].optimizedIntermediateWaypointIndex, distanceMeters, duration, legs }
-    """
-    api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-    if not api_key:
-        return {"error": "GOOGLE_MAPS_API_KEY not configured"}
-    if not origin or not destination:
-        return {"error": "origin and destination are required"}
+    # Attempt to add a compact weather summary (if API key and address available)
     try:
-        ints = intermediates or []
-        origin_p = _place_from_address(origin)
-        dest_p = _place_from_address(destination)
-        ints_p = [_place_from_address(a) for a in ints]
-        data = _compute_routes_api(origin_p, dest_p, ints_p, api_key, travel_mode, routing_preference)
-        # Convenience mapping of optimized names
-        try:
-            route0 = (data.get("routes") or [{}])[0]
-            idxs = route0.get("optimizedIntermediateWaypointIndex") or []
-            data["optimizedNames"] = [ints[i] for i in idxs if 0 <= i < len(ints)]
-        except Exception:
-            pass
-        return data
-    except requests.HTTPError as e:
-        try:
-            return {"error": f"HTTP {e.response.status_code}", "details": e.response.json()}
-        except Exception:
-            return {"error": str(e)}
-    except Exception as e:
-        return {"error": str(e)}
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+        addr = (found.get('formattedAddress') or found.get('displayName') or query)
+        if api_key and addr:
+            geo = _geocode_address(addr, api_key)
+            if geo:
+                weather = _fetch_weather_summary(geo['lat'], geo['lng'], days=3, api_key=api_key)
+                if weather:
+                    # attach under 'weather'
+                    return {**{
+                        "rating": rating_val,
+                        "total_ratings": total,
+                        "rating_str": rating_str,
+                        "photos": photos,
+                        "reviews": [t for t in review_texts if t],
+                    }, "weather": weather}
+    except Exception:
+        pass
+
+    return {
+        "rating": rating_val,
+        "total_ratings": total,
+        "rating_str": rating_str,
+        "photos": photos,
+        "reviews": [t for t in review_texts if t],
+    }
+
+# NOTE: The previous Routes / compute_route tool has been removed per project decision.
+# The LLM prompts should now request the model to consider travel times and produce a
+# route-aware ordering itself. If a route optimizer is required later, reintroduce a
+# separate, well-specified tool here.
 
 if __name__ == "__main__":
     # Cloud Run: listen on 0.0.0.0 and PORT (default 8080)
