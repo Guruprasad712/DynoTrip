@@ -3,8 +3,6 @@ options:
   logging: CLOUD_LOGGING_ONLY
   # Use a more powerful machine type for faster builds
   machineType: E2_HIGHCPU_8
-  # Add build timeout (in seconds)
-  timeout: 1800s
   # Enable Docker layer caching
   diskSizeGb: 100
 
@@ -175,5 +173,5 @@ tags:
   - 'cloud-run'
   - 'ci-cd'
 
-# Timeout for the entire build
+# Timeout for the entire build (30 minutes)
 timeout: 1800s
