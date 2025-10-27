@@ -1,50 +1,179 @@
+# Global options
 options:
   logging: CLOUD_LOGGING_ONLY
+  # Use a more powerful machine type for faster builds
+  machineType: E2_HIGHCPU_8
+  # Add build timeout (in seconds)
+  timeout: 1800s
+  # Enable Docker layer caching
+  diskSizeGb: 100
 
+# Default substitutions (can be overridden by triggers)
+# These variables should be set in your Cloud Build trigger
 substitutions:
-  _MCP_SERVER_URL: "http://127.0.0.1:8081/mcp"  # FastMCP HTTP endpoint requires /mcp; override per-env/trigger
-  _VERTEX_AI_LOCATION: "us-central1"        # Override if needed
-  _VERTEX_AI_MODEL: "gemini-2.5-flash"      # Optional model override
-  _GEMINI_API_KEY: ""                       # Provide via trigger if using Gemini API key
-  _VERTEX_API_KEY: ""                       # Provide via trigger if using Vertex API key
-  _GOOGLE_MAPS_API_KEY: ""                  # Provide via trigger
-  _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"  # Runtime SA used by Cloud Run
+  _REGION: us-central1
+  _SERVICE_NAME: dynotrip-backend
+  _ARTIFACT_REGISTRY: $_REGION-docker.pkg.dev/$PROJECT_ID/dynotrip-repo
+  _RUNTIME_SERVICE_ACCOUNT: mcp-toolbox-sa@gptrix.iam.gserviceaccount.com
+  _MCP_SERVER_URL: http://127.0.0.1:8081/mcp
+  _VERTEX_AI_LOCATION: us-central1
+  _VERTEX_AI_MODEL: gemini-2.5-flash
+  _MIN_INSTANCES: 1
+  _MAX_INSTANCES: 10
+  _CONCURRENCY: 80
+  _MEMORY: 2Gi
+  _TIMEOUT: 600
+  _PORT: 8080
+  # API Keys - These must be provided in the trigger
+  _GEMINI_API_KEY: ""
+  _VERTEX_API_KEY: ""
+  _GOOGLE_MAPS_API_KEY: ""
+
+# Environment variables (passed directly from Cloud Build variables)
+# These should be set in your Cloud Build trigger
 
 steps:
-  # Build unified backend image from Dockerfile.all
-  - name: gcr.io/cloud-builders/docker
-    id: build-backend
+  # Setup build environment
+  - id: setup
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
     args:
-      - build
-      - -t
-      - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
-      - -f
-      - backend/Dockerfile.all
-      - .
+      - '-c'
+      - |
+        echo "Setting up build environment..."
+        # Enable required services
+        gcloud services enable \
+          artifactregistry.googleapis.com \
+          run.googleapis.com \
+          cloudbuild.googleapis.com \
+          containeranalysis.googleapis.com \
+          containerscanning.googleapis.com
+        
+        # Create Artifact Registry repository if it doesn't exist
+        if ! gcloud artifacts repositories describe dynotrip-repo \
+             --location=$_REGION --format="value(name)"; then
+          gcloud artifacts repositories create dynotrip-repo \
+            --repository-format=docker \
+            --location=$_REGION \
+            --description="Docker repository for DynoTrip"
+        fi
 
-  # Push image to Artifact Registry
-  - name: gcr.io/cloud-builders/docker
-    id: push-backend
+  # Build and push the Docker image with caching
+  - id: build
+    name: 'gcr.io/cloud-builders/docker'
+    dir: 'backend'
+    entrypoint: 'bash'
     args:
-      - push
-      - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
+      - '-c'
+      - |
+        # Pull previous image for caching if available
+        docker pull ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:latest || true
+        
+        # Build with cache from previous image
+        docker build \
+          --cache-from ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:latest \
+          -t ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:$COMMIT_SHA \
+          -t ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:latest \
+          -f Dockerfile.all \
+          ..
+        
+        # Push the new image with both tags
+        docker push ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:$COMMIT_SHA
+        docker push ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:latest
+    waitFor: ['-']  # Start immediately after setup
 
-  # Deploy single Cloud Run service (API on 8080; MCP runs inside on 8081)
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: deploy-backend
-    entrypoint: gcloud
+  # Run security scanning on the built image
+  - id: scan
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
     args:
-      - run
-      - deploy
-      - dynotrip-backend
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
-      - --region=us-central1
-      - --platform=managed
-      - --service-account=$_RUNTIME_SERVICE_ACCOUNT
-      - --allow-unauthenticated
-      - --port=8080
-      - --timeout=600
-      - --set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY
+      - '-c'
+      - |
+        echo "Running vulnerability scanning..."
+        gcloud artifacts docker images scan ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:$COMMIT_SHA \
+          --location=${_REGION} \
+          --retry-count=3
+    waitFor: ['build']
 
+  # Deploy to Cloud Run with gradual rollout
+  - id: deploy
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Deploying service ${_SERVICE_NAME}..."
+        gcloud run deploy ${_SERVICE_NAME} \
+          --image=${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:$COMMIT_SHA \
+          --region=${_REGION} \
+          --platform=managed \
+          --service-account=${_RUNTIME_SERVICE_ACCOUNT} \
+          --allow-unauthenticated \
+          --port=${_PORT} \
+          --timeout=${_TIMEOUT} \
+          --concurrency=${_CONCURRENCY} \
+          --min-instances=${_MIN_INSTANCES} \
+          --max-instances=${_MAX_INSTANCES} \
+          --memory=${_MEMORY} \
+          --set-env-vars=^||^MCP_SERVER_URL=${_MCP_SERVER_URL}||VERTEX_AI_LOCATION=${_VERTEX_AI_LOCATION}||PROJECT_ID=$PROJECT_ID||VERTEX_AI_MODEL=${_VERTEX_AI_MODEL}||GEMINI_API_KEY=${_GEMINI_API_KEY}||VERTEX_API_KEY=${_VERTEX_API_KEY}||GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY} \
+          --revision-suffix=$COMMIT_SHA \
+          --no-traffic \
+          --tag=staging
+        
+        # Get the URL of the new revision
+        REVISION_URL=$(gcloud run revisions describe ${_SERVICE_NAME}-$(gcloud run services describe ${_SERVICE_NAME} \
+          --region=${_REGION} \
+          --format="value(status.latestCreatedRevisionName)") \
+          --region=${_REGION} \
+          --format="value(status.url)")
+        
+        # Gradually shift traffic to the new revision (10% every 30 seconds)
+        for percent in 10 20 30 40 50 60 70 80 90 100; do
+          echo "Shifting $percent% traffic to new revision..."
+          gcloud run services update-traffic ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --to-revisions=LATEST=$percent,staging=$((100 - percent))
+          
+          if [ $percent -lt 100 ]; then
+            sleep 30
+          fi
+        done
+        
+        # Update the 'staging' tag to point to the previous version for rollback
+        PREV_REV=$(gcloud run services describe ${_SERVICE_NAME} \
+          --region=${_REGION} \
+          --format="value(status.traffic[?tag=='staging'].revisionTag | [0])")
+        
+        if [ -n "$PREV_REV" ] && [ "$PREV_REV" != "$COMMIT_SHA" ]; then
+          gcloud run services update-traffic ${_SERVICE_NAME} \
+            --region=${_REGION} \
+            --tag=staging=${PREV_REV}
+        fi
+    # No secret environment variables - using direct substitution
+    waitFor: ['scan']
+
+  # Run integration tests against the staging environment
+  - id: test
+    name: 'python:3.11-slim'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "Running integration tests..."
+        pip install -r backend/tests/requirements-test.txt
+        python -m pytest backend/tests/integration/ -v
+    waitFor: ['deploy']
+    timeout: 600s
+
+# Output the deployed service URL
 images:
-  - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
+  - ${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:$COMMIT_SHA
+
+# Add build tags for better organization
+tags:
+  - 'backend'
+  - 'cloud-run'
+  - 'ci-cd'
+
+# Timeout for the entire build
+timeout: 1800s
