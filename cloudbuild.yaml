@@ -14,14 +14,13 @@ steps:
   # Build unified backend image from Dockerfile.all
   - name: gcr.io/cloud-builders/docker
     id: build-backend
-    dir: 'backend'  # Change directory to backend before building
     args:
       - build
       - -t
       - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
       - -f
-      - Dockerfile.all  # Now relative to backend directory
-      - .  # Build context is now the backend directory
+      - backend/Dockerfile.all
+      - .
 
   # Push image to Artifact Registry
   - name: gcr.io/cloud-builders/docker
