@@ -16,12 +16,12 @@ substitutions:
   _MCP_SERVER_URL: http://127.0.0.1:8081/mcp
   _VERTEX_AI_LOCATION: us-central1
   _VERTEX_AI_MODEL: gemini-2.5-flash
-  _MIN_INSTANCES: 1
-  _MAX_INSTANCES: 10
-  _CONCURRENCY: 80
-  _MEMORY: 2Gi
-  _TIMEOUT: 600s
-  _PORT: 8080
+  _MIN_INSTANCES: "1"
+  _MAX_INSTANCES: "10"
+  _CONCURRENCY: "20"  # Reduced from 80 to 20 for better resource utilization
+  _MEMORY: "2Gi"  # Adjust based on your application's memory requirements
+  _TIMEOUT: "600s"
+  _PORT: "8080"
   # API Keys - These must be provided in the trigger
   _GEMINI_API_KEY: ""
   _VERTEX_API_KEY: ""
@@ -113,7 +113,7 @@ steps:
           --min-instances=${_MIN_INSTANCES} \
           --max-instances=${_MAX_INSTANCES} \
           --memory=${_MEMORY} \
-          --set-env-vars=^||^MCP_SERVER_URL=${_MCP_SERVER_URL}||VERTEX_AI_LOCATION=${_VERTEX_AI_LOCATION}||PROJECT_ID=$PROJECT_ID||VERTEX_AI_MODEL=${_VERTEX_AI_MODEL}||GEMINI_API_KEY=${_GEMINI_API_KEY}||VERTEX_API_KEY=${_VERTEX_API_KEY}||GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY} \
+          --set-env-vars=MCP_SERVER_URL=${_MCP_SERVER_URL},VERTEX_AI_LOCATION=${_VERTEX_AI_LOCATION},PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=${_VERTEX_AI_MODEL},GEMINI_API_KEY=${_GEMINI_API_KEY},VERTEX_API_KEY=${_VERTEX_API_KEY},GOOGLE_MAPS_API_KEY=${_GOOGLE_MAPS_API_KEY} \
           --revision-suffix=$COMMIT_SHA \
           --no-traffic \
           --tag=staging
