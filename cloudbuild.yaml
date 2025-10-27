@@ -20,7 +20,7 @@ substitutions:
   _MAX_INSTANCES: 10
   _CONCURRENCY: 80
   _MEMORY: 2Gi
-  _TIMEOUT: 600
+  _TIMEOUT: 600s
   _PORT: 8080
   # API Keys - These must be provided in the trigger
   _GEMINI_API_KEY: ""
