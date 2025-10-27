@@ -11,7 +11,7 @@ options:
 substitutions:
   _REGION: us-central1
   _SERVICE_NAME: dynotrip-backend
-  _ARTIFACT_REGISTRY: $_REGION-docker.pkg.dev/$PROJECT_ID/dynotrip-repo
+  _ARTIFACT_REGISTRY: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/dynotrip-repo
   _RUNTIME_SERVICE_ACCOUNT: mcp-toolbox-sa@gptrix.iam.gserviceaccount.com
   _MCP_SERVER_URL: http://127.0.0.1:8081/mcp
   _VERTEX_AI_LOCATION: us-central1
