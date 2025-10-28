@@ -48,6 +48,21 @@ export default function Page() {
   const [activities, setActivities] = useState<string[]>([]);
   const [tripTheme, setTripTheme] = useState<string>('');
   const [specialInstructions, setSpecialInstructions] = useState<string>('');
+
+  const buildInputObject = () => {
+    return {
+      departure,
+      destination,
+      startDate,
+      endDate,
+      budget,
+      adults,
+      children,
+      activities,
+      tripTheme,
+      specialInstructions,
+    };
+  };
   
   // Error states
   const [errors, setErrors] = useState<{
