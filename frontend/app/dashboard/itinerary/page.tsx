@@ -60,6 +60,9 @@ function ImageCarousel({ photos }: { photos?: string[] }) {
 /** Itinerary Card */
 function ItineraryCard({ item, isHiddenGem, onDelete, onMoveUp, onMoveDown }: { item: any; isHiddenGem?: boolean; onDelete: () => void; onMoveUp: () => void; onMoveDown: () => void; }) {
   const isMeal = !!item?.__isMeal;
+  const [showWeather, setShowWeather] = React.useState(false);
+  const weather = item?.weather ?? null;
+  const weatherLabel = weather && (weather.condition ?? weather.summary) ? `${weather.condition ?? weather.summary}, ${weather.temperature ?? weather.avg_temp ?? ''}°C` : null;
   return (
     <Paper elevation={6} sx={{ borderRadius: 3, overflow: 'hidden', transition: 'transform 180ms ease', '&:hover': { transform: 'translateY(-4px)', boxShadow: 12 } }}>
       {isMeal ? (
@@ -78,6 +81,21 @@ function ItineraryCard({ item, isHiddenGem, onDelete, onMoveUp, onMoveDown }: { 
       ) : (
         <>
           <ImageCarousel photos={item.photos} />
+          {/* Weather tab above card content */}
+          <Box sx={{ px: 2, pt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            {weatherLabel ? (
+              <Chip
+                label={weatherLabel}
+                size="small"
+                color={String((weather && (weather.condition || weather.summary) || '').toLowerCase()).includes('rain') ? 'secondary' : 'primary'}
+                onClick={() => setShowWeather(s => !s)}
+                clickable
+              />
+            ) : (
+              <Chip label="Weather: not available" size="small" onClick={() => setShowWeather(s => !s)} />
+            )}
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{item.date ?? ''}</Typography>
+          </Box>
           <Box sx={{ p: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
               <Box sx={{ flex: 1 }}>
@@ -100,7 +118,21 @@ function ItineraryCard({ item, isHiddenGem, onDelete, onMoveUp, onMoveDown }: { 
                 <Tooltip title="Delete"><IconButton size="small" color="error" onClick={onDelete}><Delete /></IconButton></Tooltip>
               </Stack>
             </Stack>
-          </Box>
+            {/* Expandable weather details */}
+            {showWeather && (
+              <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+              {weather && typeof weather === 'object' ? (
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{weather.condition ?? weather.summary ?? 'N/A'}</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>{weather.temperature ?? weather.avg_temp ?? 'not available'}°C</Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>Data provided by backend</Typography>
+                </Stack>
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>Weather not available for this place.</Typography>
+              )}
+            </Box>
+        )}
+      </Box>
         </>
       )}
     </Paper>

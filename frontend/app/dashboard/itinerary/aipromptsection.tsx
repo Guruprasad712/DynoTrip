@@ -79,8 +79,10 @@ export default function AiPrompt({
     setAllowProceedManual(false);
 
     try {
-      // Choose endpoint from env if provided, else fallback to local proxy route
-      const MCP_REGENERATE = process.env.NEXT_PUBLIC_MCP_REGENERATE ?? '/api/mcp/regenerate';
+      // Choose endpoint from env if provided. Prefer a real backend if NEXT_PUBLIC_API_BASE is set,
+      // otherwise fall back to the local proxy route used during frontend-only dev.
+      const MCP_REGENERATE = process.env.NEXT_PUBLIC_MCP_REGENERATE
+        ?? (process.env.NEXT_PUBLIC_API_BASE ? `${process.env.NEXT_PUBLIC_API_BASE}/itinerary-from-selections` : '/api/mcp/regenerate');
 
       // Ensure specialInstructions is a field inside generatedPlan per MCP contract
       const bodyGeneratedPlan = (generatedPlan
