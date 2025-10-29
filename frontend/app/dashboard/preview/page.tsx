@@ -279,28 +279,38 @@ export default function PreviewPage() {
               variant="outlined" 
               color="success"
               onClick={() => {
-                try {
-                  const message = 'Hey! Check out my trip itinerary — I just planned an amazing journey!';
-                  const url = window.location.origin + '/dashboard/itinerary';
-                  const shareUrl = `https://wa.me/?text=${encodeURIComponent(`${message}\n\nView it here: ${url}`)}`;
-                  
-                  // Try to open WhatsApp in a new tab
-                  const newWindow = window.open(shareUrl, '_blank', 'noopener,noreferrer');
-                  
-                  // If popup was blocked, show a message to the user
-                  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                    // Fallback: Copy to clipboard
-                    navigator.clipboard.writeText(`${message}\n\n${url}`).then(() => {
-                      alert('Link copied to clipboard! You can now paste it in WhatsApp.');
-                    }).catch(() => {
-                      // If clipboard fails, just show the URL
-                      alert(`Could not open WhatsApp. Please copy this link manually:\n\n${url}`);
-                    });
+                (async () => {
+                  try {
+                    const fallbackPlan = {
+                      meta: { departure: inputJson?.departure, destination: inputJson?.destination, startDate: inputJson?.startDate, endDate: inputJson?.endDate, updatedAt: new Date().toISOString() },
+                      storyItinerary: days ?? [],
+                    } as any;
+                    const payload = (generatedPlan && Object.keys(generatedPlan).length) ? generatedPlan : fallbackPlan;
+                    const res = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ generatedPlan: payload }) });
+                    if (!res.ok) throw new Error('share failed');
+                    const { token } = await res.json();
+                    const base = (process.env.NEXT_PUBLIC_BASE_URL && process.env.NEXT_PUBLIC_BASE_URL.trim().length)
+                      ? process.env.NEXT_PUBLIC_BASE_URL!.replace(/\/$/, '')
+                      : window.location.origin;
+                    const url = `${base}/share/${encodeURIComponent(token)}`;
+                    // Prefilled message + link on its own line to ensure auto-linking
+                    const message = 'Hey! Check out my trip itinerary — I just planned an amazing journey!';
+                    const text = `${message}\n\n${url}`;
+                    const shareUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    const newWindow = window.open(shareUrl, '_blank', 'noopener,noreferrer');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                      try {
+                        await navigator.clipboard.writeText(text);
+                        alert('Message copied to clipboard! You can now paste it in WhatsApp.');
+                      } catch {
+                        alert(`Could not open WhatsApp. Please copy this link manually:\n\n${url}`);
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Error sharing to WhatsApp:', error);
+                    alert('Could not create a share link. Please try again.');
                   }
-                } catch (error) {
-                  console.error('Error sharing to WhatsApp:', error);
-                  alert('Could not open WhatsApp. Please try again or copy the URL manually.');
-                }
+                })();
               }}
               sx={{ 
                 color: '#25D366',

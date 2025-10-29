@@ -1,8 +1,11 @@
 import os
+import logging
 from typing import Any, Dict
 from .common import get_mcp_client, _MODEL, _gemini_client, read_file, parse_json_response, geocode_place, get_hourly_weather_summary
 from datetime import datetime
 from google import genai
+
+logger = logging.getLogger(__name__)
 
 TEMPLATE_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -28,6 +31,7 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     parts.append("You are an AI itinerary planner.\n")
     parts.append("Use ONLY this MCP tool: place_details(query). Do NOT call any other tools.\n")
     # Collect a small weather summary to provide context to the LLM (help it prefer indoor/outdoor activities).
+    weather_summary_text = ''
     try:
         start = input_json.get('startDate')
         end = input_json.get('endDate')
@@ -37,21 +41,35 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
                 sd = datetime.fromisoformat(start).date()
                 ed = datetime.fromisoformat(end).date()
                 days = max(1, (ed - sd).days + 1)
-            except Exception:
+                logger.info(f"Trip duration: {days} days ({start} to {end})")
+            except Exception as e:
+                logger.warning(f"Failed to parse dates: {e}")
                 days = 3
         dest = input_json.get('destination') or (input_json.get('selections') or {}).get('destination')
-        weather_summary_text = ''
+        logger.info(f"Destination: {dest}")
+        
         if dest:
             geo = geocode_place(dest)
             if geo:
+                logger.info(f"Geocoded {dest} to lat={geo['lat']}, lng={geo['lng']}")
                 weather = get_hourly_weather_summary(geo['lat'], geo['lng'], days=days)
                 if weather:
                     summary_lines = [f"{d}: {v.get('summary')} (avg {v.get('avg_temp')}C)" for d, v in weather.items()]
                     weather_summary_text = "\n".join(summary_lines)
-    except Exception:
-        weather_summary_text = ''
+                    logger.info(f"Fetched weather for {len(weather)} days")
+                else:
+                    logger.warning("No weather data returned from API")
+            else:
+                logger.warning(f"Could not geocode destination: {dest}")
+        else:
+            logger.warning("No destination found in input")
+    except Exception as e:
+        logger.error(f"Error fetching weather: {e}", exc_info=True)
+    
     if weather_summary_text:
         parts.append("Weather summary for trip dates/destination (concise):\n" + weather_summary_text + "\n")
+    else:
+        logger.warning("No weather summary available for prompt")
     parts.append("Do NOT call any other tools.\n")
     parts.append("Input structure: top-level contains user preferences (departure, destination, startDate, endDate, members, activities, tripTheme, budget, specialInstructions).\n")
     parts.append("Input also contains selections under 'selections' with chosen travel and accommodation.\n")
