@@ -1,0 +1,20 @@
+# Enforce LF line endings across the repo
+* text eol=lf
+
+# Treat common binary assets as binary to avoid EOL conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.bmp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+
+# Keep SVG as text (normalize to LF)
+*.svg text eol=lf
+
+# Optional: keep Windows batch as CRLF if you have any
+#*.bat text eol=crlf
