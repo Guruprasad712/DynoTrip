@@ -149,7 +149,7 @@ def geocode_place(address: str, api_key: str | None = None) -> Optional[Dict[str
         return None
     try:
         url = "https://maps.googleapis.com/maps/api/geocode/json"
-        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=10)
+        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=8)
         resp.raise_for_status()
         data = resp.json()
         results = data.get('results') or []
@@ -200,7 +200,7 @@ def get_hourly_weather_summary(lat: float, lng: float, days: int = 3, api_key: s
         # Hint metric units where supported (harmless if ignored)
         "units": "metric",
       }
-      resp = requests.get(url, params=params, timeout=12)
+      resp = requests.get(url, params=params, timeout=10)
       resp.raise_for_status()
       data = resp.json() or {}
 

@@ -15,13 +15,19 @@ TEMPLATE_PATH = os.path.join(
     "generated_itinerary.json",
 )
 
+# Cache template to avoid reading file on every request
+_TEMPLATE_CACHE = None
+
 async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generate itinerary using ONLY MCP tools for places and route optimizer.
     Should consider available travel and stay information included in input_json.
     Expects `input_json` matching templates/input_jsons/input_selections.json.
     """
-    template_json = read_file(TEMPLATE_PATH)
+    global _TEMPLATE_CACHE
+    if _TEMPLATE_CACHE is None:
+        _TEMPLATE_CACHE = read_file(TEMPLATE_PATH)
+    template_json = _TEMPLATE_CACHE
     mcp_client = get_mcp_client()
     if mcp_client is None:
         raise RuntimeError("MCP server not available. Please run agents/itinerary_agent/utils/agent.py and set MCP_SERVER_URL.")
@@ -32,6 +38,7 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     parts.append("Use ONLY this MCP tool: place_details(query). Do NOT call any other tools.\n")
     # Collect a small weather summary to provide context to the LLM (help it prefer indoor/outdoor activities).
     weather_summary_text = ''
+    weather = {}  # Initialize before try block to ensure it's always in scope
     try:
         start = input_json.get('startDate')
         end = input_json.get('endDate')
@@ -81,18 +88,19 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     parts.append("- Do NOT add hotel entries as places in the itinerary items; hotels only influence timing (check-in/out) and context.\n")
     parts.append("Rules:\n")
     parts.append("- Each day's order should be route-aware: consider realistic travel times between places and produce an order that minimizes travel time and is feasible for the day.\n")
-    parts.append("- For main itinerary items: include up to 3 photos, 1-sentence description (<=25 words), and 2–3 short review lines.\n")
+    parts.append("- For main itinerary items: include up to 2 photos, 1-sentence description (<=20 words), and 1–2 short review lines.\n")
     parts.append("- For each itinerary item (generatedPlan.storyItinerary[].items[]), include a 'weather' object with keys: date (YYYY-MM-DD), summary (short word like Rainy/Sunny/Cloudy), and avg_temp (C or null).\n")
     parts.append("- For suggestedPlaces and hiddenGems: exactly 1 photo, exactly 1 short review, and rating if available via place_details.\n")
     parts.append("- Limit suggestedPlaces to at most 3 and hiddenGems to at most 2.\n")
-    parts.append("- Limit total place_details calls to at most 8 across the plan.\n")
+    parts.append("- Limit total place_details calls to at most 5 across the plan to optimize performance.\n")
     parts.append("- Consider any provided travel and accommodation context from input when building feasible day plans.\n")
     parts.append("- Base Day 1 timing on the selected outbound arrival window when possible; keep schedule realistic relative to check-in.\n")
     parts.append("Output MUST strictly match this JSON template (keys and types):\n")
     parts.append("Template: " + template_json + "\n")
     parts.append("Input: " + str(input_json) + "\n")
 
-    weather_map = weather if isinstance(locals().get('weather'), dict) else {}
+    # Capture weather for async closure
+    weather_map = weather if isinstance(weather, dict) else {}
     async def _run(weather_map=weather_map):
         async with mcp_client:
             cfg = genai.types.GenerateContentConfig(
