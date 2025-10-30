@@ -177,12 +177,12 @@ def place_details(query: str) -> dict:
             return {"error": "Could not extract place ID"}
 
         details = _places_details(place_id, api_key)
-        # Photos (up to 5)
+        # Photos (up to 3)
         photos = []
-        for p in (details.get('photos') or [])[:5]:
+        for p in (details.get('photos') or [])[:3]:
             pname = p.get('name')
             if pname:
-                photos.append(f"https://places.googleapis.com/v1/{pname}/media?key={api_key}&maxWidthPx=800")
+                photos.append(f"https://places.googleapis.com/v1/{pname}/media?key={api_key}&maxWidthPx=600")
         # Reviews (top 3 latest, text only)
         def _parse_time(rv):
             t = rv.get('publishTime')
@@ -192,7 +192,7 @@ def place_details(query: str) -> dict:
                 except Exception:
                     return datetime.min
             return datetime.min
-        revs = sorted(details.get('reviews') or [], key=_parse_time, reverse=True)[:3]
+        revs = sorted(details.get('reviews') or [], key=_parse_time, reverse=True)[:2]
         review_texts = [(rv.get('originalText') or {}).get('text') for rv in revs]
 
         rating_val = details.get('rating')
