@@ -92,7 +92,8 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     parts.append("Template: " + template_json + "\n")
     parts.append("Input: " + str(input_json) + "\n")
 
-    async def _run():
+    weather_map = weather if isinstance(locals().get('weather'), dict) else {}
+    async def _run(weather_map=weather_map):
         async with mcp_client:
             cfg = genai.types.GenerateContentConfig(
                 tools=[mcp_client.session],
@@ -114,14 +115,31 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
                             w = itm.get('weather')
                             # If not a dict or missing, set not available
                             if not isinstance(w, dict):
+                                # Use per-date weather dict if available from earlier fetch
+                                if day_date and isinstance(weather_map, dict) and day_date in weather_map:
+                                    entry = weather_map.get(day_date) or {}
+                                    itm['weather'] = {
+                                        'temperature': (entry.get('avg_temp') if 'avg_temp' in entry else entry.get('temperature')) or 'not available',
+                                        'condition': (entry.get('summary') if 'summary' in entry else entry.get('condition')) or 'not available',
+                                    }
+                                    continue
                                 itm['weather'] = {'temperature': 'not available', 'condition': 'not available'}
                                 continue
                             # If already in expected shape, ensure values present
                             if 'temperature' in w and 'condition' in w:
                                 if w.get('temperature') is None or w.get('temperature') == '':
-                                    itm['weather']['temperature'] = 'not available'
+                                    # Backfill from fetched weather if possible
+                                    if day_date and isinstance(weather_map, dict) and day_date in weather_map:
+                                        entry = weather_map.get(day_date) or {}
+                                        itm['weather']['temperature'] = entry.get('avg_temp') if entry.get('avg_temp') is not None else 'not available'
+                                    else:
+                                        itm['weather']['temperature'] = 'not available'
                                 if not w.get('condition'):
-                                    itm['weather']['condition'] = 'not available'
+                                    if day_date and isinstance(weather_map, dict) and day_date in weather_map:
+                                        entry = weather_map.get(day_date) or {}
+                                        itm['weather']['condition'] = entry.get('summary') or 'not available'
+                                    else:
+                                        itm['weather']['condition'] = 'not available'
                                 continue
                             # Otherwise assume per-date map -> pick entry by day_date or first available
                             entry = None
