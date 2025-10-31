@@ -65,8 +65,7 @@ def _places_details(place_id: str, api_key: str):
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': api_key,
         # Only fetch what we actually use
-        # Explicitly request photo names so we can build media URLs
-        'X-Goog-FieldMask': 'rating,userRatingCount,photos.name,photos.widthPx,photos.heightPx,reviews.originalText.text,reviews.publishTime',
+        'X-Goog-FieldMask': 'rating,userRatingCount,photos,reviews',
     }
     resp = requests.get(url, headers=headers, timeout=10)
     resp.raise_for_status()

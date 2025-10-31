@@ -40,9 +40,8 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     weather_summary_text = ''
     weather = {}  # Initialize before try block to ensure it's always in scope
     try:
-        # Prefer top-level, but fall back to meta.* if present
-        start = input_json.get('startDate') or (input_json.get('meta') or {}).get('startDate')
-        end = input_json.get('endDate') or (input_json.get('meta') or {}).get('endDate')
+        start = input_json.get('startDate')
+        end = input_json.get('endDate')
         days = 3
         if start and end:
             try:
@@ -53,11 +52,7 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
             except Exception as e:
                 logger.warning(f"Failed to parse dates: {e}")
                 days = 3
-        dest = (
-            input_json.get('destination')
-            or (input_json.get('selections') or {}).get('destination')
-            or (input_json.get('meta') or {}).get('destination')
-        )
+        dest = input_json.get('destination') or (input_json.get('selections') or {}).get('destination')
         logger.info(f"Destination: {dest}")
         
         if dest:
