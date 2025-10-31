@@ -34,9 +34,10 @@ PLACES_DEBUG = os.getenv("PLACES_DEBUG", "0") == "1"
 
 def _places_search(text_query: str, api_key: str):
     if text_query in _search_cache:
-        if PLACES_DEBUG:
-            print(f"[places] cache hit search: {text_query}")
+        print(f"[DEBUG] Cache hit for search query: {text_query}")
         return _search_cache[text_query]
+        
+    print(f"[DEBUG] Making Places API search request for: {text_query}")
     url = f"{PLACES_BASE_URL}:searchText"
     headers = {
         'Content-Type': 'application/json',
@@ -44,38 +45,82 @@ def _places_search(text_query: str, api_key: str):
         'X-Goog-FieldMask': 'places.id,places.name,places.displayName,places.formattedAddress,places.googleMapsUri',
     }
     payload = {"textQuery": text_query, "maxResultCount": 1, "languageCode": "en"}
-    resp = requests.post(url, headers=headers, json=payload, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    places = data.get('places') or []
-    result = places[0] if places else None
-    if PLACES_DEBUG:
-        print(f"[places] search '{text_query}' -> found={bool(result)}")
-    if result is not None:
-        _search_cache[text_query] = result
-    return result
+    
+    try:
+        print(f"[DEBUG] Sending request to: {url}")
+        print(f"[DEBUG] Headers: {headers}")
+        print(f"[DEBUG] Payload: {payload}")
+        
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        print(f"[DEBUG] Response status: {resp.status_code}")
+        
+        # Log response headers for debugging
+        print(f"[DEBUG] Response headers: {dict(resp.headers)}")
+        
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"[DEBUG] Raw API response: {data}")
+        
+        places = data.get('places') or []
+        result = places[0] if places else None
+        
+        print(f"[DEBUG] Found {len(places)} places, first result: {result}")
+        
+        if result is not None:
+            _search_cache[text_query] = result
+            print(f"[DEBUG] Cached search result for: {text_query}")
+            
+        return result
+        
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Places API search request failed: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"[ERROR] Response status: {e.response.status_code}")
+            print(f"[ERROR] Response body: {e.response.text}")
+        raise
 
 def _places_details(place_id: str, api_key: str):
     if place_id in _details_cache:
-        if PLACES_DEBUG:
-            print(f"[places] cache hit details: {place_id}")
+        print(f"[DEBUG] Cache hit for place details: {place_id}")
         return _details_cache[place_id]
+        
+    print(f"[DEBUG] Fetching details for place_id: {place_id}")
     url = f"{PLACES_BASE_URL}/{place_id}"
     headers = {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': api_key,
-        # Only fetch what we actually use
         'X-Goog-FieldMask': 'rating,userRatingCount,photos,reviews',
     }
-    resp = requests.get(url, headers=headers, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    if PLACES_DEBUG:
+    
+    try:
+        print(f"[DEBUG] Sending request to: {url}")
+        print(f"[DEBUG] Headers: {headers}")
+        
+        resp = requests.get(url, headers=headers, timeout=10)
+        print(f"[DEBUG] Response status: {resp.status_code}")
+        
+        # Log response headers for debugging
+        print(f"[DEBUG] Response headers: {dict(resp.headers)}")
+        
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"[DEBUG] Raw details response: {data}")
+        
         photos_count = len(data.get('photos') or [])
         reviews_count = len(data.get('reviews') or [])
-        print(f"[places] details {place_id}: photos={photos_count}, reviews={reviews_count}")
-    _details_cache[place_id] = data
-    return data
+        print(f"[DEBUG] Place {place_id} details - photos: {photos_count}, reviews: {reviews_count}")
+        
+        _details_cache[place_id] = data
+        print(f"[DEBUG] Cached details for place_id: {place_id}")
+        
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Places API details request failed: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"[ERROR] Response status: {e.response.status_code}")
+            print(f"[ERROR] Response body: {e.response.text}")
+        raise
 
 
 # ---- Minimal geocode + weather helpers (used by place_details) ----
@@ -158,31 +203,51 @@ def place_details(query: str) -> dict:
     """
     api_key = os.getenv("GOOGLE_MAPS_API_KEY")
     if not api_key:
+        print("[DEBUG] Error: GOOGLE_MAPS_API_KEY not found in environment")
         return {"error": "GOOGLE_MAPS_API_KEY not configured"}
     if not query:
+        print("[DEBUG] Error: Empty query provided")
         return {"error": "query cannot be empty"}
     try:
-        if PLACES_DEBUG:
-            print(f"[places] QUERY: {query}")
+        print(f"[DEBUG] Starting place_details lookup for query: {query}")
         found = _places_search(query, api_key)
+        print(f"[DEBUG] _places_search response: {found}")
+        
         if not found:
+            print("[DEBUG] No place found for query")
             return {"error": "Place not found"}
+            
         # Extract place ID
         place_id = found.get('id')
+        print(f"[DEBUG] Initial place_id from found: {place_id}")
+        
         if not place_id:
             name_field = found.get('name')
+            print(f"[DEBUG] No direct place_id, checking name field: {name_field}")
             if isinstance(name_field, str) and name_field.startswith('places/'):
                 place_id = name_field.split('/', 1)[1]
+                print(f"[DEBUG] Extracted place_id from name: {place_id}")
+                
         if not place_id:
+            print("[DEBUG] Could not extract place ID from response")
             return {"error": "Could not extract place ID"}
 
+        print(f"[DEBUG] Fetching details for place_id: {place_id}")
         details = _places_details(place_id, api_key)
+        print(f"[DEBUG] _places_details response: {details}")
+        
         # Photos (up to 3)
         photos = []
-        for p in (details.get('photos') or [])[:3]:
+        photo_objects = details.get('photos', [])
+        print(f"[DEBUG] Found {len(photo_objects)} photo objects in details")
+        
+        for i, p in enumerate(photo_objects[:3], 1):
             pname = p.get('name')
+            print(f"[DEBUG] Photo {i} name: {pname}")
             if pname:
-                photos.append(f"https://places.googleapis.com/v1/{pname}/media?key={api_key}&maxWidthPx=600")
+                photo_url = f"https://places.googleapis.com/v1/{pname}/media?key={api_key}&maxWidthPx=600"
+                print(f"[DEBUG] Generated photo URL: {photo_url}")
+                photos.append(photo_url)
         # Reviews (top 3 latest, text only)
         def _parse_time(rv):
             t = rv.get('publishTime')
