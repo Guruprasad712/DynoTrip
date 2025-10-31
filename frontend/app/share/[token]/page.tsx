@@ -22,7 +22,8 @@ function ImageStrip({ photos }: { photos?: string[] }) {
 }
 
 export default function SharedPlanPage() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams() as { token?: string } | null;
+  const token = params?.token;
   const [plan, setPlan] = useState<any | null>(null);
   const [err, setErr] = useState<string | null>(null);
 

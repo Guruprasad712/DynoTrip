@@ -149,7 +149,7 @@ def geocode_place(address: str, api_key: str | None = None) -> Optional[Dict[str
         return None
     try:
         url = "https://maps.googleapis.com/maps/api/geocode/json"
-        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=10)
+        resp = requests.get(url, params={"address": address, "key": api_key}, timeout=8)
         resp.raise_for_status()
         data = resp.json()
         results = data.get('results') or []
@@ -169,54 +169,101 @@ def get_hourly_weather_summary(lat: float, lng: float, days: int = 3, api_key: s
     This is intentionally simple: picks the most frequent condition label in the day's hours.
     """
     if api_key is None:
-        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+      api_key = os.getenv('GOOGLE_MAPS_API_KEY')
     if not api_key:
-        return {}
+      return {}
+
+    # Helper: robust ISO parsing (accepts 'Z', fractional seconds, or missing timezone)
+    def _parse_ts(ts_val: Any) -> Optional[datetime]:
+      if not ts_val:
+        return None
+      s = str(ts_val)
+      try:
+        return datetime.fromisoformat(s.replace('Z', '+00:00'))
+      except Exception:
+        try:
+          # drop fractional seconds if present
+          base = s.split('.')[0]
+          if base.endswith('Z'):
+            base = base.replace('Z', '+00:00')
+          return datetime.fromisoformat(base)
+        except Exception:
+          return None
+
     summaries: Dict[str, Any] = {}
     try:
-        url = "https://weather.googleapis.com/v1/forecast/hours:lookup"
-        params = {"key": api_key, "location.latitude": lat, "location.longitude": lng}
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        hours = data.get('hours') or []
-        buckets: Dict[str, list] = {}
-        now = datetime.utcnow()
-        for h in hours:
-            ts = h.get('time') or h.get('startTime') or h.get('datetime')
-            try:
-                dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-            except Exception:
-                continue
-            date_key = dt.date().isoformat()
-            if (dt.date() - now.date()).days >= days:
-                continue
-            buckets.setdefault(date_key, []).append(h)
+      url = "https://weather.googleapis.com/v1/forecast/hours:lookup"
+      params = {
+        "key": api_key,
+        "location.latitude": lat,
+        "location.longitude": lng,
+        # Hint metric units where supported (harmless if ignored)
+        "units": "metric",
+      }
+      resp = requests.get(url, params=params, timeout=10)
+      resp.raise_for_status()
+      data = resp.json() or {}
 
-        for i in range(days):
-            d = (now + timedelta(days=i)).date().isoformat()
-            day_hours = buckets.get(d, [])
-            if not day_hours:
-                summaries[d] = {'summary': 'Unknown', 'detail': None}
-                continue
-            cond_counts: Dict[str, int] = {}
-            temps: list = []
-            for h in day_hours:
-                cond = (h.get('condition') or {}).get('code') or (h.get('condition') or {}).get('text') or 'Unknown'
-                cond_counts[cond] = cond_counts.get(cond, 0) + 1
-                temp = h.get('temperature') or (h.get('temperatureC') if 'temperatureC' in h else None)
-                if temp is not None:
-                    try:
-                        temps.append(float(temp))
-                    except Exception:
-                        pass
-            most = max(cond_counts.items(), key=lambda x: x[1])[0] if cond_counts else 'Unknown'
-            avg_temp = (sum(temps)/len(temps)) if temps else None
-            summaries[d] = {
-                'summary': most,
-                'avg_temp': round(avg_temp,1) if avg_temp is not None else None,
-                'detail_count': len(day_hours),
-            }
+      # Some responses might nest differently; prefer 'hours', else try alternative common keys
+      hours = data.get('hours')
+      if not isinstance(hours, list):
+        # try alternative shapes commonly seen
+        hours = (data.get('hourly') or {}).get('hours') or data.get('forecasts') or []
+        if not isinstance(hours, list):
+          hours = []
+
+      # Bucket hours by day for next N days starting from now (UTC)
+      buckets: Dict[str, list] = {}
+      now = datetime.utcnow()
+      for h in hours:
+        ts = h.get('time') or h.get('startTime') or h.get('datetime')
+        dt = _parse_ts(ts)
+        if dt is None:
+          continue
+        # Only include hours within the requested horizon
+        delta_days = (dt.date() - now.date()).days
+        if delta_days < 0 or delta_days >= max(1, int(days)):
+          continue
+        date_key = dt.date().isoformat()
+        buckets.setdefault(date_key, []).append(h)
+
+      # Build daily summaries
+      for i in range(max(1, int(days))):
+        d = (now + timedelta(days=i)).date().isoformat()
+        day_hours = buckets.get(d, [])
+        if not day_hours:
+          summaries[d] = {"summary": "Unknown", "avg_temp": None, "detail_count": 0}
+          continue
+        cond_counts: Dict[str, int] = {}
+        temps: list = []
+        for h in day_hours:
+          cond_obj = h.get('condition') or {}
+          cond = (
+            cond_obj.get('text')
+            or cond_obj.get('code')
+            or h.get('weather_text')
+            or h.get('weatherCode')
+            or 'Unknown'
+          )
+          cond_counts[str(cond)] = cond_counts.get(str(cond), 0) + 1
+          temp = (
+            h.get('temperature')
+            or h.get('temperatureC')
+            or h.get('temp_c')
+            or h.get('temperature_2m')
+          )
+          if temp is not None:
+            try:
+              temps.append(float(temp))
+            except Exception:
+              pass
+        most = max(cond_counts.items(), key=lambda x: x[1])[0] if cond_counts else 'Unknown'
+        avg_temp = (sum(temps) / len(temps)) if temps else None
+        summaries[d] = {
+          'summary': 'Unknown' if most is None else str(most),
+          'avg_temp': round(avg_temp, 1) if avg_temp is not None else None,
+          'detail_count': len(day_hours),
+        }
     except Exception:
-        return {}
+      return {}
     return summaries
