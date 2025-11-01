@@ -29,7 +29,7 @@ steps:
       - push
       - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
 
-  # Deploy single Cloud Run service (API on 8080; MCP runs inside on 8081)
+  # Deploy single Cloud Run service
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
     entrypoint: gcloud
@@ -45,10 +45,14 @@ steps:
       - --port=8080
       - --timeout=600
       - --min-instances=1
-      - --max-instances=3
+      - --max-instances=1
       - --cpu=1
       - --memory=1Gi
-      - --concurrency=80
-      
+      - --concurrency=1
+      - --ingress=all
+      - --update-env-vars=PORT=8080,PYTHONUNBUFFERED=1,LOG_LEVEL=DEBUG
+      - --clear-env-vars
+      - --revision-suffix=debug-$(date +%s)
+
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
