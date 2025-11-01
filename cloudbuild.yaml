@@ -51,7 +51,6 @@ steps:
       - --concurrency=1
       - --ingress=all
       - --update-env-vars=PORT=8080,PYTHONUNBUFFERED=1,LOG_LEVEL=DEBUG
-      - --clear-env-vars
       - --revision-suffix=debug-$(date +%s)
 
 images:
