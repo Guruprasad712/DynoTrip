@@ -1,70 +1,31 @@
-# Build stage
-FROM python:3.11-slim as builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install Python dependencies
-WORKDIR /app
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Runtime stage
 FROM python:3.11-slim
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONHASHSEED=random \
-    PYTHONFAULTHANDLER=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_DEFAULT_TIMEOUT=100 \
-    PYTHONPATH=/app
+    PIP_NO_CACHE_DIR=1
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    supervisor \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser \
-    && mkdir -p /app /home/appuser \
-    && chown -R appuser:appuser /app /home/appuser
-
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Set working directory and copy application
 WORKDIR /app
-COPY --chown=appuser:appuser backend/ .
 
-# Copy supervisord config
-COPY --chown=appuser:appuser backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# System deps (supervisor to run multiple processes)
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    build-essential supervisor \
+  && rm -rf /var/lib/apt/lists/*
 
-# Switch to non-root user
-USER appuser
+# Python deps
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+# Copy backend code
+COPY backend/ ./
 
+# Supervisord config
+COPY backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Cloud Run will route to $PORT; we expose API on 8080, MCP on 8081
 ENV PORT=8080
+EXPOSE 8080
 
-# Update the CMD to use the PORT
-CMD ["sh", "-c", "uvicorn api.app:app --host 0.0.0.0 --port ${PORT} --workers 4"]
-
-# Expose ports
-EXPOSE 8080 8081
-
-# Command to run the application
-CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Start both MCP (on 8081) and FastAPI (on 8080)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
