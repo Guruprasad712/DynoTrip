@@ -26,5 +26,5 @@ COPY backend/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 ENV PORT=8080
 EXPOSE 8080
 
-# Start both MCP (on 8081) and FastAPI (on 8080)
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Small delay before supervisor starts, gives app time to init
+CMD ["/bin/sh", "-c", "sleep 3 && exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
