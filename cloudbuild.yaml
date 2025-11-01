@@ -2,49 +2,55 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _MCP_SERVER_URL: "http://127.0.0.1:8081/mcp"  # FastMCP HTTP endpoint requires /mcp; override per-env/trigger
-  _VERTEX_AI_LOCATION: "us-central1"        # Override if needed
-  _VERTEX_AI_MODEL: "gemini-2.5-flash"      # Optional model override
-  _GEMINI_API_KEY: ""                       # Provide via trigger if using Gemini API key
-  _VERTEX_API_KEY: ""                       # Provide via trigger if using Vertex API key
-  _GOOGLE_MAPS_API_KEY: ""                  # Provide via trigger
-  _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"  # Runtime SA used by Cloud Run
+  _MCP_SERVER_URL: "http://127.0.0.1:8081/mcp"
+  _VERTEX_AI_LOCATION: "us-central1"
+  _VERTEX_AI_MODEL: "gemini-2.5-flash"
+  _GEMINI_API_KEY: ""
+  _VERTEX_API_KEY: ""
+  _GOOGLE_MAPS_API_KEY: ""
+  _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"
 
 steps:
-  # Build unified backend image from Dockerfile.all
+  # ---------- Build backend image ----------
   - name: gcr.io/cloud-builders/docker
     id: build-backend
     args:
-      - build
-      - -t
-      - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
-      - -f
-      - backend/Dockerfile.all
-      - .
+      [
+        "build",
+        "-t",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA",
+        "-f",
+        "backend/Dockerfile.all",
+        "."
+      ]
 
-  # Push image to Artifact Registry
+  # ---------- Push image to Artifact Registry ----------
   - name: gcr.io/cloud-builders/docker
     id: push-backend
     args:
-      - push
-      - "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
+      [
+        "push",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
+      ]
 
-  # Deploy single Cloud Run service (API on 8080; MCP runs inside on 8081)
+  # ---------- Deploy to Cloud Run ----------
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-backend
     entrypoint: gcloud
     args:
-      - run
-      - deploy
-      - dynotrip-backend
-      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
-      - --region=us-central1
-      - --platform=managed
-      - --service-account=$_RUNTIME_SERVICE_ACCOUNT
-      - --allow-unauthenticated
-      - --port=8080
-      - --timeout=600
-      - --set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY
+      [
+        "run",
+        "deploy",
+        "dynotrip-backend",
+        "--image=us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA",
+        "--region=us-central1",
+        "--platform=managed",
+        "--service-account=$_RUNTIME_SERVICE_ACCOUNT",
+        "--allow-unauthenticated",
+        "--port=8080",
+        "--timeout=600",
+        "--set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY"
+      ]
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
