@@ -1,6 +1,7 @@
+# ---------- Base image ----------
 FROM python:3.11-slim
 
-# Set environment variables
+# ---------- Environment setup ----------
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -12,47 +13,53 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GUNICORN_CMD_ARGS="--log-level=debug --access-logfile - --error-logfile -" \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install curl for health checks
+# ---------- System deps ----------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl build-essential net-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# ---------- Working dir ----------
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies first (to leverage Docker cache)
+# ---------- Install Python deps ----------
 COPY backend/requirements.txt .
 RUN pip install --upgrade pip==23.3.2 && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# ---------- Copy source ----------
 COPY backend/ .
 
-# Create a non-root user and switch to it
+# ---------- Create non-root user ----------
 RUN adduser --disabled-password --gecos "" appuser && \
     chown -R appuser:appuser /app
+USER appuser
 
-# Health check
+# ---------- Health check ----------
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:$PORT/health || exit 1
 
-# Expose the port the app runs on
+# ---------- Startup script ----------
+RUN cat <<'EOF' > /app/startup.sh
+#!/bin/sh
+set -x
+echo "=== Environment Variables ==="
+printenv
+echo ""
+echo "=== Current Directory ==="
+pwd
+ls -la
+echo ""
+echo "=== Python Info ==="
+python --version
+pip list
+echo ""
+echo "=== Starting Application ==="
+echo "Starting Uvicorn on port ${PORT:-8080}"
+exec uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --log-level debug --no-server-header --timeout-keep-alive 60
+EOF
+
+RUN chmod +x /app/startup.sh
+
+# ---------- Expose and run ----------
 EXPOSE 8080
-
-# Switch to non-root user
-USER appuser
-
-# Create a startup script
-RUN echo '#!/bin/sh \n\
-set -x \n\
-echo "=== Environment Variables ===" \nprintenv \necho "" \n\necho "=== Current Directory ===" \npwd \nls -la \necho "" \n\necho "=== Python Info ===" \npython --version \npip list \necho "" \n\necho "=== Network Info ===" \nnetstat -tuln \necho "" \n\necho "=== Starting Application ===" \n\n# Start the application with error handling\nif [ -z "$PORT" ]; then \n    echo "ERROR: PORT environment variable is not set" \n    exit 1 \nfi \n\necho "Starting Uvicorn on port $PORT" \n\n# Start the application\nexec uvicorn api.app:app --host 0.0.0.0 --port $PORT --workers 1 --log-level debug --no-server-header --timeout-keep-alive 60 \n' > /app/startup.sh && chmod +x /app/startup.sh
-
-# Command to run the application with the startup script
 CMD ["/app/startup.sh"]
