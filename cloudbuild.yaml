@@ -50,6 +50,6 @@ steps:
       - --memory=1Gi
       - --concurrency=1
       - --ingress=all
-      - --update-env-vars=PORT=8080,PYTHONUNBUFFERED=1,LOG_LEVEL=DEBUG
+      - --update-env-vars=PYTHONUNBUFFERED=1,LOG_LEVEL=DEBUG
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
