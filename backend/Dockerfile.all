@@ -50,13 +50,4 @@ EXPOSE 8080
 USER appuser
 
 # Command to run the application with better error reporting
-CMD ["sh", "-c", "
-    echo 'Environment variables:' && \
-    printenv && \
-    echo 'Starting application...' && \
-    echo 'Current directory:' && pwd && ls -la && \
-    echo 'Checking Python version:' && python --version && \
-    echo 'Installed packages:' && pip list && \
-    echo 'Starting Uvicorn...' && \
-    exec uvicorn api.app:app --host 0.0.0.0 --port $PORT --workers 1 --log-level debug
-"]
+CMD ["sh", "-c", "echo 'Environment variables:' && printenv && echo 'Starting application...' && echo 'Current directory:' && pwd && ls -la && echo 'Checking Python version:' && python --version && echo 'Installed packages:' && pip list && echo 'Starting Uvicorn...' && exec uvicorn api.app:app --host 0.0.0.0 --port $PORT --workers 1 --log-level debug"]
