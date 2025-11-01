@@ -11,33 +11,31 @@ substitutions:
   _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"
 
 steps:
-  # Build image
+  # Step 1: Build the backend Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       [
         'build',
-        '-t', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend',
-        '-f', 'Dockerfile.all',
-        '.'
+        '-t', 'gcr.io/$PROJECT_ID/dynotrip-backend',
+        '-f', 'backend/Dockerfile.all',
+        'backend'
       ]
 
-  # Push image to Artifact Registry
+  # Step 2: Push the image to Container Registry (or Artifact Registry)
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend']
+    args: ['push', 'gcr.io/$PROJECT_ID/dynotrip-backend']
 
-  # Deploy to Cloud Run
+  # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    entrypoint: 'gcloud'
     args:
       [
         'run', 'deploy', 'dynotrip-backend',
-        '--image', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend',
-        '--region', 'us-central1',
+        '--image', 'gcr.io/$PROJECT_ID/dynotrip-backend',
+        '--region', 'us-central1',     # change this to your region
         '--platform', 'managed',
-        '--allow-unauthenticated',
-        '--timeout', '900'
+        '--allow-unauthenticated'
       ]
 
 images:
-  - 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend'
-
+  - 'gcr.io/$PROJECT_ID/dynotrip-backend'
