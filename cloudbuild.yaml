@@ -11,46 +11,33 @@ substitutions:
   _RUNTIME_SERVICE_ACCOUNT: "mcp-toolbox-sa@gptrix.iam.gserviceaccount.com"
 
 steps:
-  # ---------- Build backend image ----------
-  - name: gcr.io/cloud-builders/docker
-    id: build-backend
+  # Build image
+  - name: 'gcr.io/cloud-builders/docker'
     args:
       [
-        "build",
-        "-t",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA",
-        "-f",
-        "backend/Dockerfile.all",
-        "."
+        'build',
+        '-t', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend',
+        '-f', 'Dockerfile.all',
+        '.'
       ]
 
-  # ---------- Push image to Artifact Registry ----------
-  - name: gcr.io/cloud-builders/docker
-    id: push-backend
-    args:
-      [
-        "push",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA"
-      ]
+  # Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend']
 
-  # ---------- Deploy to Cloud Run ----------
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: deploy-backend
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       [
-        "run",
-        "deploy",
-        "dynotrip-backend",
-        "--image=us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA",
-        "--region=us-central1",
-        "--platform=managed",
-        "--service-account=$_RUNTIME_SERVICE_ACCOUNT",
-        "--allow-unauthenticated",
-        "--port=8080",
-        "--timeout=600",
-        "--set-env-vars=MCP_SERVER_URL=$_MCP_SERVER_URL,VERTEX_AI_LOCATION=$_VERTEX_AI_LOCATION,PROJECT_ID=$PROJECT_ID,VERTEX_AI_MODEL=$_VERTEX_AI_MODEL,GEMINI_API_KEY=$_GEMINI_API_KEY,VERTEX_API_KEY=$_VERTEX_API_KEY,GOOGLE_MAPS_API_KEY=$_GOOGLE_MAPS_API_KEY"
+        'run', 'deploy', 'dynotrip-backend',
+        '--image', 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend',
+        '--region', 'us-central1',
+        '--platform', 'managed',
+        '--allow-unauthenticated',
+        '--timeout', '900'
       ]
 
 images:
-  - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
+  - 'us-central1-docker.pkg.dev/gptrix/dynotrip-repo/backend'
+
