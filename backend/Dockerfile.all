@@ -1,58 +1,26 @@
-FROM python:3.11-slim
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PORT=8080 \
-    WEB_CONCURRENCY=1 \
-    PYTHONPATH=/app \
-    LOG_LEVEL=DEBUG \
-    MCP_SERVER_URL=http://127.0.0.1:8081/mcp \
-    GUNICORN_CMD_ARGS="--log-level=debug --access-logfile - --error-logfile -" \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Install curl for health checks
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Use a lightweight Python image
+FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install OS dependencies (psutil needs gcc sometimes)
+RUN apt-get update && apt-get install -y gcc curl && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first (to leverage Docker cache)
-COPY backend/requirements.txt .
-RUN pip install --upgrade pip==23.3.2 && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy dependencies first
+COPY requirements.txt .
 
-# Copy application code
-COPY backend/ .
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a non-root user and switch to it
-RUN adduser --disabled-password --gecos "" appuser && \
-    chown -R appuser:appuser /app
+# Copy the rest of your application
+COPY . .
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:$PORT/health || exit 1
+# Cloud Run expects the app to listen on this port
+ENV PORT=8080
 
-# Expose the port the app runs on
+# Expose it (for documentation only)
 EXPOSE 8080
 
-# Switch to non-root user
-USER appuser
-
-# Create a startup script
-RUN echo '#!/bin/sh \n\
-set -x \n\
-echo "=== Environment Variables ===" \nprintenv \necho "" \n\necho "=== Current Directory ===" \npwd \nls -la \necho "" \n\necho "=== Python Info ===" \npython --version \npip list \necho "" \n\necho "=== Network Info ===" \nnetstat -tuln \necho "" \n\necho "=== Starting Application ===" \n\n# Start the application with error handling\nif [ -z "$PORT" ]; then \n    echo "ERROR: PORT environment variable is not set" \n    exit 1 \nfi \n\necho "Starting Uvicorn on port $PORT" \n\n# Start the application\nexec uvicorn api.app:app --host 0.0.0.0 --port $PORT --workers 1 --log-level debug --no-server-header --timeout-keep-alive 60 \n' > /app/startup.sh && chmod +x /app/startup.sh
-
-# Command to run the application with the startup script
-CMD ["/app/startup.sh"]
+# Start the FastAPI app with uvicorn
+CMD exec uvicorn app:app --host 0.0.0.0 --port ${PORT}
