@@ -51,7 +51,5 @@ steps:
       - --concurrency=1
       - --ingress=all
       - --update-env-vars=PORT=8080,PYTHONUNBUFFERED=1,LOG_LEVEL=DEBUG
-      - --revision-suffix=debug-$(date +%s | tr -d ':-' | tr '[:upper:]' '[:lower:]' | cut -c 1-40)
-
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/dynotrip-repo/dynotrip-backend:$COMMIT_SHA
