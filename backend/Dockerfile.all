@@ -1,29 +1,38 @@
 FROM python:3.11-slim
 
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080 \
     WEB_CONCURRENCY=2 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update -y && apt-get install -y --no-install-recommends \
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies first (to leverage Docker cache)
 COPY backend/requirements.txt .
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install -r requirements.txt
+RUN pip install --upgrade pip==23.3.2 && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY backend/ .
+
+# Create a non-root user and switch to it
+RUN adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 # Expose the port the app runs on
 EXPOSE 8080
 
 # Command to run the application
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+CMD ["uvicorn", "--host", "0.0.0.0", "--port", "8080", "--workers", "2", "--timeout-keep-alive", "60", "api.app:app"]
