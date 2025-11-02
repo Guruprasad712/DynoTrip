@@ -1,82 +1,94 @@
-# DynoTrip
-AI-powered trip planner for the Google Cloud hackathon.
+# 🚀 DynoTrip - AI-Powered Travel Planning Assistant
 
-## Project Structure
-- `backend/` — FastAPI service that calls Gemini/Vertex AI via `google-genai` and uses MCP tools (Google ADK) for travel, stay, and itinerary generation.
-- `frontend/` — Next.js (App Router) UI with Material UI. Includes local mock API routes under `pages/api/mcp/` so the app can run without the backend.
 
-## Quick Start (Frontend with Mocks)
-This mode requires no backend or keys and is suitable for demo/evaluation.
+DynoTrip is an intelligent travel planning platform that leverages Google's Gemini AI and MCP tools to create personalized travel experiences. Whether you're planning a weekend getaway or a month-long adventure, DynoTrip simplifies the process by generating customized travel plans based on your preferences.
 
-1. Open a terminal in `frontend/`
-2. Install dependencies: `npm install`
-3. Start dev server: `npm run dev`
-4. Open http://localhost:3000
+## 🏆 Hackathon Submission
 
-The UI will use the mock endpoints in `frontend/pages/api/mcp/` to provide a full flow (travel, stay, itinerary) without real MCP or Gemini.
+This project was developed for the Google Cloud Hackathon, showcasing the power of:
+- Google's Gemini AI for natural language understanding
+- MCP (Multi-Cloud Platform) tools for travel data integration
+- Modern web technologies for a seamless user experience
 
-## Full Stack Run (Requires MCP + Gemini/Vertex)
-If you’d like to run the real generation endpoints, set up the backend and MCP tools server.
+## ✨ Features
+
+- **AI-Powered Itinerary Generation**: Get personalized travel plans in seconds
+- **Smart Destination Matching**: Find your perfect destination based on preferences
+- **Accommodation & Transportation**: Seamless integration with travel services
+- **Real-time Customization**: Modify and refine your travel plan with AI assistance
+- **Offline Demo Mode**: Try the app without API keys
+
+## 🛠️ Tech Stack
 
 ### Backend
-- Create `backend/.env` from `backend/env.example` and fill values:
-  - `MCP_SERVER_URL` (e.g., `http://127.0.0.1:9000/mcp`)
-  - `GEMINI_API_KEY` or Vertex ADC variables (`PROJECT_ID`, `VERTEX_AI_LOCATION`)
-  - If using service account, set `GOOGLE_APPLICATION_CREDENTIALS` path
-- Install deps: `pip install -r backend/requirements.txt`
-- Start: `uvicorn backend.api.app:app --reload --port 8000`
-- Health check: `GET http://localhost:8000/health`
+- **Framework**: FastAPI (Python)
+- **AI/ML**: Google Gemini, Vertex AI
+- **Cloud**: Google Cloud Platform (Cloud Run, Secret Manager)
+- **Tools**: MCP (Google ADK)
 
 ### Frontend
-- Create `frontend/.env.local` from `frontend/env.local.example`
-- Set `NEXT_PUBLIC_MCP_PLAN=http://localhost:8000/travel-stay`
-- Install & run:
-  - `npm install`
-  - `npm run dev`
+- **Framework**: Next.js 13+ (App Router)
+- **UI**: Material UI, TailwindCSS
+- **State Management**: React Context API
+- **Build**: TypeScript, Vercel
 
-Optionally wire itinerary endpoints by modifying the mock API routes to proxy to:
-- `POST /itinerary-from-selections`
-- `POST /itinerary`
+## 🚀 Solution Overview
 
-## Environment Variables
+DynoTrip is a comprehensive travel planning solution that leverages cutting-edge AI to simplify trip planning. Here's how it works:
 
-### Required for Production (Cloud Run)
-- `MCP_SERVER_URL`: The URL of the MCP service (injected via Secret Manager)
-- `GEMINI_API_KEY` or `VERTEX_API_KEY`: For Gemini/Vertex AI access
-- `PROJECT_ID`: Google Cloud Project ID
-- `VERTEX_AI_LOCATION`: Region for Vertex AI (e.g., us-central1)
-- `VERTEX_AI_MODEL`: (Optional) Defaults to "gemini-2.5-flash"
+### Core Features
+- **AI-Powered Planning**: Utilizes Google's Gemini AI to understand travel preferences and generate personalized itineraries
+- **Smart Integration**: Seamlessly connects with MCP tools for real-time travel data and recommendations
+- **Responsive Interface**: Modern, mobile-friendly UI built with Next.js and Material-UI
+- **Cloud-Native Architecture**: Designed for scalability on Google Cloud Platform
 
-### Local Development
-Create a `.env` file in the `backend` directory with:
+### Technical Highlights
+- **Backend**: FastAPI microservices with async support
+- **Frontend**: Next.js with App Router for optimal performance
+- **AI/ML**: Google Gemini for natural language understanding
+- **Deployment**: Containerized with Docker for consistent environments
+
+## 🌐 Live Demo
+
+Experience DynoTrip in action by visiting our hosted demo. No setup required!
+
+[![Live Demo](https://img.shields.io/badge/View-Live%20Demo-blue?style=for-the-badge&logo=google-chrome)](https://drive.google.com/file/d/1k4xqbaF_Wwn6Ln8wDKUx5D-IRFYkb3Fe/view?usp=sharing)
+
+## 🛠️ Getting Started (For Developers)
+
+For developers interested in the technical implementation or contributing to the project, please refer to our [Developer Documentation](docs/DEVELOPMENT.md).
+
+## 📚 Documentation
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/travel-stay` | POST | Generate travel + stay recommendations |
+| `/itinerary-from-selections` | POST | Create itinerary from user selections |
+| `/itinerary` | POST | Refine existing itinerary |
+
+### Project Structure
+
 ```
-MCP_SERVER_URL=http://localhost:9000/mcp  # Or your MCP service URL
-GEMINI_API_KEY=your-api-key  # Or use VERTEX_API_KEY for Vertex AI
-PROJECT_ID=your-project-id
-VERTEX_AI_LOCATION=us-central1
-GOOGLE_APPLICATION_CREDENTIALS=path/to/your/credentials.json
+dynotrip/
+├── backend/               # FastAPI service
+│   ├── api/              # API routes
+│   ├── agents/           # AI agents
+│   ├── services/         # Business logic
+│   └── requirements.txt  # Python dependencies
+└── frontend/            # Next.js application
+    ├── app/             # App router pages
+    ├── pages/           # API routes
+    └── public/          # Static assets
 ```
 
-## Security & Submission Notes
-- Do NOT commit secrets. Replace real env files with examples:
-  - Backend: `backend/env.example` → copy to `.env` locally
-  - Frontend: `frontend/env.local.example` → copy to `.env.local` locally
-- The repo has a root `.gitignore` to exclude common secrets and heavy artifacts.
-- Before submission, remove:
-  - `backend/.env`, any credentials under `backend/keys/`
-  - Local envs: `.venv/`, `backend/venv/`
-  - Frontend build artifacts: `frontend/node_modules/`, `frontend/.next/`
-- If any keys were previously committed, revoke and rotate them immediately.
+## 🤝 Contributing
 
-## Backend Endpoints (when enabled)
-- `POST /travel-stay` — Generate travel + stay JSON from user preferences
-- `POST /itinerary-from-selections` — Generate itinerary using user-selected travel/stay
-- `POST /itinerary` — Refine an end-to-end itinerary from a previous plan
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Frontend Key Files
-- `app/page.tsx` — Landing form that calls MCP plan endpoint or local mock
-- `app/dashboard/context/TripContext.tsx` — In-memory + localStorage store with seed/mocks
-- `pages/api/mcp/*` — Mock API endpoints for demo mode
 
-## License
-For hackathon evaluation use only.
