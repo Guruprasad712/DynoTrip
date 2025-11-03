@@ -1,7 +1,7 @@
 # ========================
 # 1. Base Image
 # ========================
-FROM python:3.11-slim
+FROM python:3.11-slim-bullseye
 
 # ========================
 # 2. Install system dependencies
@@ -23,7 +23,14 @@ COPY backend/requirements.txt .
 # ========================
 # 5. Install Python dependencies
 # ========================
-RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0 uvicorn[standard]==0.23.2
+# Upgrade pip first to avoid version conflicts
+RUN pip install --upgrade pip && \
+    # Install core requirements first
+    pip install --no-cache-dir -r requirements.txt && \
+    # Install specific versions of gunicorn and uvicorn
+    pip install --no-cache-dir gunicorn==21.2.0 uvicorn[standard]==0.23.2 && \
+    # Clean up pip cache to reduce image size
+    rm -rf /root/.cache/pip/*
 
 # ========================
 # 6. Copy the entire backend folder
