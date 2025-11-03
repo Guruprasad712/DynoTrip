@@ -2,9 +2,11 @@ import asyncio
 import json
 import os
 import time
+import atexit
 import aiohttp
+import requests
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union, Tuple
+from typing import Dict, List, Optional, Any, Union, Tuple, cast
 from functools import wraps, lru_cache
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP
@@ -58,6 +60,11 @@ WEATHER_URL = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest
 CACHE_TTL = 3600  # 1 hour
 RATE_LIMIT = 50  # requests per minute
 CONCURRENT_REQUESTS = 10  # Max concurrent requests
+
+# Type aliases
+WeatherData = Dict[str, Any]
+PlaceDetails = Dict[str, Any]
+GeocodeResult = Dict[str, Any]
 
 # Request model for batching
 class PlaceSearchRequest(BaseModel):
@@ -477,6 +484,22 @@ async def batch_place_details(queries: List[str]) -> Dict[str, dict]:
                 print(f"Error processing {query}: {result}")
                 results[query] = {"error": str(result)}
             else:
+                # Process reviews for the result (top 2 latest, text only)
+                def _parse_time(rv):
+                    t = rv.get('publishTime')
+                    if isinstance(t, str):
+                        try:
+                            return datetime.fromisoformat(t.replace('Z', '+00:00'))
+                        except Exception:
+                            return datetime.min
+                    return datetime.min
+                
+                # Sort reviews by publish time and get top 2
+                if 'reviews' in result:
+                    revs = sorted(result['reviews'], key=_parse_time, reverse=True)[:2]
+                    review_texts = [(rv.get('originalText') or {}).get('text', '') for rv in revs]
+                    result['review_texts'] = review_texts
+                
                 results[query] = result
         
         # Add a small delay between batches
@@ -484,77 +507,31 @@ async def batch_place_details(queries: List[str]) -> Dict[str, dict]:
             await asyncio.sleep(0.5)
     
     return results
-                    time.sleep(0.1)
-        # Reviews (top 3 latest, text only)
-        def _parse_time(rv):
-            t = rv.get('publishTime')
-            if isinstance(t, str):
-                try:
-                    return datetime.fromisoformat(t.replace('Z', '+00:00'))
-                except Exception:
-                    return datetime.min
-            return datetime.min
-        revs = sorted(details.get('reviews') or [], key=_parse_time, reverse=True)[:2]
-        review_texts = [(rv.get('originalText') or {}).get('text') for rv in revs]
 
-        rating_val = details.get('rating')
-        total = details.get('userRatingCount')
-        rating_str = None
-        try:
-            if rating_val is not None and total is not None:
-                rating_str = f"{float(rating_val):.1f} ({int(total)})"
-        except Exception:
-            rating_str = None
+async def init_session():
+    """Initialize global HTTP session."""
+    global session
+    if session is None or session.closed:
+        timeout = aiohttp.ClientTimeout(total=30)
+        session = aiohttp.ClientSession(timeout=timeout)
 
-        return {
-            "rating": rating_val,
-            "total_ratings": total,
-            "rating_str": rating_str,
-            "photos": photos,
-            "reviews": [t for t in review_texts if t],
-        }
-    except requests.HTTPError as e:
-        try:
-            return {"error": f"HTTP {e.response.status_code}", "details": e.response.json()}
-        except Exception:
-            return {"error": str(e)}
-    except Exception as e:
-        return {"error": str(e)}
+async def close_session():
+    """Close the global HTTP session."""
+    global session
+    if session and not session.closed:
+        await session.close()
 
-    # Attempt to add a compact weather summary (if API key and address available)
-    try:
-        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
-        addr = (found.get('formattedAddress') or found.get('displayName') or query)
-        if api_key and addr:
-            geo = _geocode_address(addr, api_key)
-            if geo:
-                weather = _fetch_weather_summary(geo['lat'], geo['lng'], days=3, api_key=api_key)
-                if weather:
-                    # attach under 'weather'
-                    return {**{
-                        "rating": rating_val,
-                        "total_ratings": total,
-                        "rating_str": rating_str,
-                        "photos": photos,
-                        "reviews": [t for t in review_texts if t],
-                    }, "weather": weather}
-    except Exception:
-        pass
-
-    return {
-        "rating": rating_val,
-        "total_ratings": total,
-        "rating_str": rating_str,
-        "photos": photos,
-        "reviews": [t for t in review_texts if t],
-    }
-
-# NOTE: The previous Routes / compute_route tool has been removed per project decision.
-# The LLM prompts should now request the model to consider travel times and produce a
-# route-aware ordering itself. If a route optimizer is required later, reintroduce a
-# separate, well-specified tool here.
+# Register cleanup handlers
+atexit.register(lambda: asyncio.get_event_loop().run_until_complete(close_session()))
 
 if __name__ == "__main__":
-    # Cloud Run: listen on 0.0.0.0 and PORT (default 8080)
-    port = int(os.getenv("PORT", "8080"))
-    mcp.run(transport="http", host="0.0.0.0", port=port)
+    # Initialize the session
+    asyncio.get_event_loop().run_until_complete(init_session())
+    
+    try:
+        # Cloud Run: listen on 0.0.0.0 and PORT (default 8080)
+        port = int(os.getenv("PORT", "8080"))
+        mcp.run(transport="http", host="0.0.0.0", port=port)
+    finally:
+        # Ensure session is closed on exit
+        asyncio.get_event_loop().run_until_complete(close_session())
