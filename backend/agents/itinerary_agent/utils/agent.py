@@ -460,6 +460,12 @@ async def batch_place_details(queries: List[str]) -> Dict[str, dict]:
     """
     if not queries:
         return {}
+    
+    # Initialize session if not already done
+    try:
+        await init_session()
+    except Exception as e:
+        return {q: {"error": f"Failed to initialize session: {str(e)}", "status": "error"} for q in queries}
         
     # Deduplicate queries while preserving order
     unique_queries = []
@@ -473,38 +479,73 @@ async def batch_place_details(queries: List[str]) -> Dict[str, dict]:
     results = {}
     batch_size = 10
     
-    for i in range(0, len(unique_queries), batch_size):
-        batch = unique_queries[i:i + batch_size]
-        tasks = [place_details_async(q) for q in batch]
-        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Process results
-        for query, result in zip(batch, batch_results):
-            if isinstance(result, Exception):
-                print(f"Error processing {query}: {result}")
-                results[query] = {"error": str(result)}
-            else:
-                # Process reviews for the result (top 2 latest, text only)
-                def _parse_time(rv):
-                    t = rv.get('publishTime')
-                    if isinstance(t, str):
-                        try:
-                            return datetime.fromisoformat(t.replace('Z', '+00:00'))
-                        except Exception:
-                            return datetime.min
-                    return datetime.min
-                
-                # Sort reviews by publish time and get top 2
-                if 'reviews' in result:
-                    revs = sorted(result['reviews'], key=_parse_time, reverse=True)[:2]
-                    review_texts = [(rv.get('originalText') or {}).get('text', '') for rv in revs]
-                    result['review_texts'] = review_texts
-                
-                results[query] = result
-        
-        # Add a small delay between batches
-        if i + batch_size < len(unique_queries):
-            await asyncio.sleep(0.5)
+    try:
+        for i in range(0, len(unique_queries), batch_size):
+            batch = unique_queries[i:i + batch_size]
+            tasks = []
+            
+            # Create tasks with proper error handling
+            for q in batch:
+                try:
+                    task = asyncio.create_task(place_details_async(q))
+                    tasks.append((q, task))
+                except Exception as e:
+                    results[q] = {"error": f"Failed to create task: {str(e)}", "status": "error"}
+            
+            # Execute tasks
+            if tasks:
+                queries_batch, tasks_batch = zip(*tasks)
+                try:
+                    batch_results = await asyncio.gather(*tasks_batch, return_exceptions=True)
+                    
+                    # Process results
+                    for query, result in zip(queries_batch, batch_results):
+                        if isinstance(result, Exception):
+                            print(f"Error processing {query}: {result}")
+                            results[query] = {"error": str(result), "status": "error"}
+                        else:
+                            try:
+                                # Process reviews for the result (top 2 latest, text only)
+                                def _parse_time(rv):
+                                    t = rv.get('publishTime')
+                                    if isinstance(t, str):
+                                        try:
+                                            return datetime.fromisoformat(t.replace('Z', '+00:00'))
+                                        except Exception:
+                                            return datetime.min
+                                    return datetime.min
+                                
+                                # Sort reviews by publish time and get top 2
+                                if 'reviews' in result and isinstance(result['reviews'], list):
+                                    try:
+                                        revs = sorted(result['reviews'], key=_parse_time, reverse=True)[:2]
+                                        review_texts = [(rv.get('originalText') or {}).get('text', '') for rv in revs]
+                                        result['review_texts'] = review_texts
+                                    except Exception as e:
+                                        print(f"Error processing reviews for {query}: {e}")
+                                        result['review_texts'] = []
+                                
+                                results[query] = result
+                                
+                            except Exception as e:
+                                print(f"Error processing result for {query}: {e}")
+                                results[query] = {"error": f"Error processing result: {str(e)}", "status": "error"}
+                except Exception as e:
+                    print(f"Error in batch processing: {e}")
+                    for q in queries_batch:
+                        if q not in results:
+                            results[q] = {"error": f"Batch processing failed: {str(e)}", "status": "error"}
+            
+            # Add a small delay between batches
+            if i + batch_size < len(unique_queries):
+                await asyncio.sleep(0.5)
+    
+    except Exception as e:
+        print(f"Unexpected error in batch_place_details: {e}")
+        # Ensure all queries have a response
+        for q in unique_queries:
+            if q not in results:
+                results[q] = {"error": f"Unexpected error: {str(e)}", "status": "error"}
     
     return results
 
@@ -524,14 +565,28 @@ async def close_session():
 # Register cleanup handlers
 atexit.register(lambda: asyncio.get_event_loop().run_until_complete(close_session()))
 
-if __name__ == "__main__":
+async def start_server():
     # Initialize the session
-    asyncio.get_event_loop().run_until_complete(init_session())
+    await init_session()
     
     try:
-        # Cloud Run: listen on 0.0.0.0 and PORT (default 8080)
-        port = int(os.getenv("PORT", "8080"))
-        mcp.run(transport="http", host="0.0.0.0", port=port)
+        # MCP server runs on port 8081 to avoid conflict with main app on 8080
+        mcp_port = 8081
+        print(f"Starting MCP server on port {mcp_port}...")
+        # Set the MCP server URL in environment for other services to use
+        os.environ["MCP_SERVER_URL"] = f"http://localhost:{mcp_port}/mcp"
+        await mcp.serve(host="0.0.0.0", port=mcp_port)
+    except asyncio.CancelledError:
+        print("Server shutdown requested...")
+    except Exception as e:
+        print(f"Error starting server: {e}")
+        raise
     finally:
         # Ensure session is closed on exit
-        asyncio.get_event_loop().run_until_complete(close_session())
+        await close_session()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(start_server())
+    except KeyboardInterrupt:
+        print("\nServer stopped by user")
