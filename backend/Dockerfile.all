@@ -4,32 +4,63 @@
 FROM python:3.11-slim
 
 # ========================
-# 2. Set working directory
+# 2. Install system dependencies
+# ========================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# ========================
+# 3. Set working directory
 # ========================
 WORKDIR /app
 
 # ========================
-# 3. Copy dependency file
+# 4. Copy dependency file
 # ========================
 COPY backend/requirements.txt .
 
 # ========================
-# 4. Install dependencies
+# 5. Install Python dependencies
 # ========================
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0 uvicorn[standard]==0.23.2
 
 # ========================
-# 5. Copy the entire backend folder
+# 6. Copy the entire backend folder
 # ========================
 COPY backend/ .
 
 # ========================
-# 6. Expose and set PORT
+# 7. Expose ports
 # ========================
-EXPOSE 8080
-ENV PORT=8080
+EXPOSE 8080 8081
 
 # ========================
-# 7. Run FastAPI using Uvicorn
+# 8. Set environment variables
 # ========================
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+ENV PORT=8080
+# MCP server runs on localhost (127.0.0.1) for security
+# The URL is used by other services to connect to the MCP server
+ENV MCP_SERVER_URL=http://127.0.0.1:8081/mcp
+
+# ========================
+# 9. Create a startup script
+# ========================
+RUN echo '#!/bin/bash\nset -e\n\n# Log function with timestamps\nlog() {\n    echo "[$(date +"%Y-%m-%d %H:%M:%S")] $1"\n}\n\n# Start MCP server in the background\nlog "Starting MCP server..."\npython -m agents.itinerary_agent.utils.agent &\nMCP_PID=$!\n\n# Function to clean up background processes\ncleanup() {\n    log "Shutting down processes..."\n    kill -TERM $MCP_PID 2>/dev/null || true\n    wait $MCP_PID 2>/dev/null || true\n    exit 0\n}\n\n# Set up trap for signals\ntrap cleanup SIGTERM SIGINT\n\n# Wait for MCP server to start or fail\nlog "Waiting for MCP server to start on port 8081..."\nfor i in {1..10}; do\n    if nc -z localhost 8081; then\n        log "MCP server is running on port 8081"\n        break\n    fi\n    if ! ps -p $MCP_PID > /dev/null; then\n        log "ERROR: MCP server failed to start"\n        exit 1\n    fi\n    if [ $i -eq 10 ]; then\n        log "ERROR: Timed out waiting for MCP server to start"\n        exit 1\n    fi\n    sleep 1\ndone\n\n# Start FastAPI app\nlog "Starting FastAPI app on port $PORT..."\nexec gunicorn --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:$PORT \
+    --workers 1 \
+    --timeout 120 \
+    --keep-alive 30 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level debug \
+    --capture-output \
+    --enable-stdio-inheritance \
+    --preload \
+    api.app:app\n' > /app/start.sh && \
+    chmod +x /app/start.sh
+
+# ========================
+# 10. Run the startup script
+# ========================
+CMD ["/app/start.sh"]
