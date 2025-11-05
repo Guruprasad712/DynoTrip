@@ -11,25 +11,8 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
-
-# Configure OpenTelemetry
-try:
-    resource = Resource(attributes={"service.name": "dynotrip-api"})
-    provider = TracerProvider(resource=resource)
-    otlp_exporter = OTLPSpanExporter()
-    span_processor = BatchSpanProcessor(otlp_exporter)
-    provider.add_span_processor(span_processor)
-    trace.set_tracer_provider(provider)
-except Exception as e:
-    logging.warning(f"Failed to initialize OpenTelemetry: {e}")
 
 # Response class that uses orjson for faster JSON serialization
 class ORJSONResponse(ORJSONResponse):
@@ -150,9 +133,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="DynoTrip API",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
