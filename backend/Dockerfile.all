@@ -26,10 +26,10 @@ COPY backend/requirements.txt .
 # ========================
 # Upgrade pip first to avoid version conflicts
 RUN pip install --upgrade pip && \
-    # Install core requirements first
+    # Install core requirements first (let pip handle the versions)
     pip install --no-cache-dir -r requirements.txt && \
-    # Install specific versions of gunicorn and uvicorn
-    pip install --no-cache-dir gunicorn==21.2.0 uvicorn[standard]==0.23.2 && \
+    # Install gunicorn
+    pip install --no-cache-dir gunicorn==21.2.0 && \
     # Clean up pip cache to reduce image size
     rm -rf /root/.cache/pip/*
 
