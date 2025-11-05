@@ -1,84 +1,44 @@
-# ========================
-# 1. Base Image
-# ========================
 FROM python:3.11-slim-bullseye
 
-# ========================
-# 2. Install system dependencies
-# ========================
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# ========================
-# 3. Set working directory
-# ========================
 WORKDIR /app
-
-# ========================
-# 4. Copy dependency file
-# ========================
 COPY backend/requirements.txt .
 
-# ========================
-# 5. Install Python dependencies
-# ========================
-# Upgrade pip first to avoid version conflicts
-RUN pip install --upgrade pip && \
-    # Install core requirements first (let pip handle the versions)
-    pip install --no-cache-dir -r requirements.txt && \
-    # Install gunicorn
-    pip install --no-cache-dir gunicorn==21.2.0 && \
-    # Clean up pip cache to reduce image size
-    rm -rf /root/.cache/pip/*
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0
 
-# ========================
-# 6. Copy the entire backend folder
-# ========================
+# Copy application code
 COPY backend/ .
 
-# ========================
-# 7. Expose ports
-# ========================
-EXPOSE 8080 8081
-
-# ========================
-# 8. Set environment variables
-# ========================
+# Environment variables
 ENV PORT=8080
-# MCP server runs on localhost (127.0.0.1) for security
-# The URL is used by other services to connect to the MCP server
 ENV MCP_SERVER_URL=http://127.0.0.1:8081/mcp
 
-# ========================
-# 9. Create a health check script with enhanced logging
-# ========================
-RUN echo '#!/bin/bash\nset -ex\n\n# Log function with timestamp and log level\nlog() {\n    local level=$1\n    shift\n    echo "[$(date +"%Y-%m-%d %H:%M:%S")] [$level] $*"\n}\n\n# Check if port is listening using Python to avoid nc dependency\ncheck_port() {\n    local port=$1\n    log "DEBUG" "Checking if port $port is listening..."\n    if ! python3 -c "\nimport socket\nimport sys\n\ntry:\n    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    sock.settimeout(1)\n    result = sock.connect_ex((\'127.0.0.1\', $port))\n    sock.close()\n    sys.exit(0 if result == 0 else 1)\nexcept Exception as e:\n    print(f\'Error checking port: {e}\', file=sys.stderr)\n    sys.exit(1)\n"; then\n        log "ERROR" "Port $port is not listening"\n        return 1\n    fi\n    log "DEBUG" "Port $port is listening"\n    return 0\n}\n\n# Check if process is running\ncheck_process() {\n    local pattern=$1\n    log "DEBUG" "Checking if process matching \"$pattern\" is running..."\n    if ! pgrep -f "$pattern" > /dev/null; then\n        log "ERROR" "No process found matching: $pattern"\n        return 1\n    fi\n    log "DEBUG" "Found process matching: $pattern"\n    return 0\n}\n\n# Wait for port to be available\nwait_for_port() {\n    local port=$1\n    local service_name=${2:-service}\n    local max_attempts=30\n    local attempt=0\n    \n    log "INFO" "Waiting for $service_name to start on port $port..."\n    \n    while [ $attempt -lt $max_attempts ]; do\n        if check_port $port; then\n            log "INFO" "$service_name is running on port $port"\n            return 0\n        fi\n        attempt=$((attempt + 1))\n        log "DEBUG" "Attempt $attempt/$max_attempts - $service_name not ready yet"\n        sleep 1\n    done\n    \n    log "ERROR" "Timed out waiting for $service_name to start on port $port"\n    return 1\n}\n\n# Log environment variables for debugging\nlog_env() {\n    log "INFO" "Environment variables:"\n    env | sort | while read -r line; do\n        log "INFO" "  $line"\n    done\n}\n\n# Log process list\nlog_processes() {\n    log "DEBUG" "Current processes:"\n    ps aux || true\n}\n\n# Log network status\nlog_network() {\n    log "DEBUG" "Network status:"\n    netstat -tuln 2>/dev/null || true\n    echo "---"\n    netstat -tulnp 2>/dev/null || true\n}\n\n# Main health check\nif [ "$1" = "health" ]; then\n    log "INFO" "Health check triggered"\n    if check_port 8080; then\n        log "INFO" "Health check passed"\n        exit 0\n    else\n        log "ERROR" "Health check failed - port 8080 not listening"\n        log_network\n        exit 1\n    fi\nfi\n\n# Log initial state\nlog "INFO" "=== Starting container ==="\nlog_env\nlog_processes\nlog_network\n\n# Start MCP server in the background\nlog "INFO" "Starting MCP server..."\npython -m agents.itinerary_agent.utils.agent &\nMCP_PID=$!\nlog "INFO" "MCP server started with PID: $MCP_PID"\n\n# Function to clean up background processes\ncleanup() {\n    log "INFO" "Shutdown signal received, cleaning up..."\n    if [ -n "$MCP_PID" ]; then\n        log "INFO" "Stopping MCP server (PID: $MCP_PID)"\n        kill -TERM $MCP_PID 2>/dev/null || true\n        wait $MCP_PID 2>/dev/null || true\n    fi\n    log "INFO" "Cleanup complete"\n    exit 0\n}\n\n# Set up trap for signals\ntrap cleanup SIGTERM SIGINT\n\n# Wait for MCP server to start\nif ! wait_for_port 8081 "MCP server"; then\n    log "ERROR" "MCP server failed to start"\n    log_processes\n    log_network\n    exit 1\nfi\n\nlog "INFO" "MCP server is running"\nlog_network\n\n# Start FastAPI app\nlog "INFO" "Starting FastAPI app on port $PORT..."\nlog_processes\n\n# Start Gunicorn with Uvicorn worker\nlog "INFO" "Starting Gunicorn with Uvicorn worker..."\nexec gunicorn \
-    --bind 0.0.0.0:$PORT \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --workers 1 \
-    --timeout 120 \
-    --keep-alive 30 \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level debug \
-    --capture-output \
-    --preload \
-    --worker-tmp-dir /dev/shm \
-    --log-file=- \
-    --log-level=debug \
-    --enable-stdio-inheritance \
-    api.app:app 2>&1 | tee -a /var/log/gunicorn.log' > /app/startup.sh && \
-    chmod +x /app/startup.sh && \
-    mkdir -p /var/log && \
-    touch /var/log/gunicorn.log && \
-    chmod 666 /var/log/gunicorn.log
+# Create non-root user
+RUN addgroup --system appgroup && \
+    adduser --system --no-create-home --disabled-login --ingroup appgroup appuser && \
+    chown -R appuser:appgroup /app
 
-# ========================
-# 10. Set health check and startup command
-# ========================
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/app/startup.sh", "health"] || exit 1
+# Simple startup script
+RUN echo '#!/bin/sh\
+python3 -m mcp.server &\
+exec gunicorn \\\
+    --bind 0.0.0.0:\$PORT \\\
+    --worker-class uvicorn.workers.UvicornWorker \\\
+    --workers 1 \\\
+    --timeout 120 \\\
+    api.app:app' > /app/startup.sh && \
+    chmod +x /app/startup.sh
 
-CMD ["/app/startup.sh"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1); s.connect(('localhost', 8080)); s.close()" || exit 1
+
+USER appuser
+EXPOSE 8080 8081
+
+ENTRYPOINT ["/app/startup.sh"]
