@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy and install dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0
 
 # Copy application code
-COPY . .
+COPY backend/ .
 
 # Environment variables
 ENV PORT=8080
