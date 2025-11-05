@@ -15,7 +15,7 @@ google-api-python-client==2.120.0
 
 # MCP / Google Travel Agent Toolbox
 google-adk==0.3.0
-fastmcp==0.3.6
+fastmcp==2.13.0.2
 
 # Gemini / Vertex AI
 google-genai==0.5.0
