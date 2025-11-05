@@ -5,40 +5,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
+# Set working directory
 WORKDIR /app
-COPY backend/requirements.txt .
 
-# Install Python dependencies
+# Copy and install dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0
 
 # Copy application code
-COPY backend/ .
+COPY . .
 
 # Environment variables
 ENV PORT=8080
 ENV MCP_SERVER_URL=http://127.0.0.1:8081/mcp
 
-# Create non-root user
+# Create non-root user and set permissions
 RUN addgroup --system appgroup && \
     adduser --system --no-create-home --disabled-login --ingroup appgroup appuser && \
     chown -R appuser:appgroup /app
 
-# Simple startup script
-RUN echo '#!/bin/sh\
-python3 -m mcp.server &\
-exec gunicorn \\\
-    --bind 0.0.0.0:\$PORT \\\
-    --worker-class uvicorn.workers.UvicornWorker \\\
-    --workers 1 \\\
-    --timeout 120 \\\
-    api.app:app' > /app/startup.sh && \
+# Create startup script
+RUN printf '#!/bin/sh\n\
+exec gunicorn \\\n\
+    --bind 0.0.0.0:$PORT \\\n\
+    --worker-class uvicorn.workers.UvicornWorker \\\n\
+    --workers 1 \\\n\
+    --timeout 120 \\\n\
+    api.app:app\n' > /app/startup.sh && \
     chmod +x /app/startup.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1); s.connect(('localhost', 8080)); s.close()" || exit 1
+    CMD python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('localhost',8080)); s.close()" || exit 1
 
+# Switch to non-root user
 USER appuser
+
+# Expose ports
 EXPOSE 8080 8081
 
-ENTRYPOINT ["/app/startup.sh"]
+# Run startup script
+CMD ["/app/startup.sh"]
