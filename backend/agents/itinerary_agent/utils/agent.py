@@ -565,28 +565,129 @@ async def close_session():
 # Register cleanup handlers
 atexit.register(lambda: asyncio.get_event_loop().run_until_complete(close_session()))
 
-async def start_server():
-    # Initialize the session
-    await init_session()
+# Global variable to store the MCP server task
+mcp_server_task = None
+
+async def start_mcp_server():
+    """Start the MCP server in the background."""
+    global mcp_server_task
     
     try:
+        # Initialize the session with timeout
+        print("[MCP] Initializing HTTP session...")
+        await init_session()
+        
         # MCP server runs on port 8081 to avoid conflict with main app on 8080
         mcp_port = 8081
-        print(f"Starting MCP server on port {mcp_port}...")
+        print(f"[MCP] Starting MCP server on port {mcp_port}...")
+        
         # Set the MCP server URL in environment for other services to use
-        os.environ["MCP_SERVER_URL"] = f"http://localhost:{mcp_port}/mcp"
-        await mcp.serve(host="0.0.0.0", port=mcp_port)
+        mcp_url = f"http://127.0.0.1:{mcp_port}/mcp"
+        os.environ["MCP_SERVER_URL"] = mcp_url
+        print(f"[MCP] MCP server URL set to: {mcp_url}")
+        
+        # Verify port is available
+        try:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(('0.0.0.0', mcp_port))
+                s.settimeout(5)  # Set a timeout for the connection
+        except OSError as e:
+            print(f"[MCP] ERROR: Port {mcp_port} is not available: {e}")
+            raise
+            
+        # Start the MCP server
+        print(f"[MCP] Starting MCP service...")
+        mcp_server_task = asyncio.create_task(mcp.serve(host="0.0.0.0", port=mcp_port))
+        
+        # Wait for server to start with timeout
+        start_time = time.time()
+        timeout = 10  # seconds
+        
+        while time.time() - start_time < timeout:
+            try:
+                # Check if server is running by making a request to the health endpoint
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"http://127.0.0.1:{mcp_port}/health") as resp:
+                        if resp.status == 200:
+                            print(f"[MCP] Server started successfully on port {mcp_port}")
+                            return mcp_server_task
+                await asyncio.sleep(0.5)
+            except (aiohttp.ClientError, ConnectionError):
+                await asyncio.sleep(0.5)
+                
+        # If we get here, the server didn't start in time
+        error_msg = f"[MCP] ERROR: Server failed to start within {timeout} seconds"
+        print(error_msg)
+        raise TimeoutError(error_msg)
+        
     except asyncio.CancelledError:
-        print("Server shutdown requested...")
-    except Exception as e:
-        print(f"Error starting server: {e}")
+        print("[MCP] Shutdown requested...")
         raise
+    except Exception as e:
+        print(f"[MCP] Critical error: {e}", exc_info=True)
+        # Re-raise to ensure container fails fast
+        raise SystemExit(1)
     finally:
-        # Ensure session is closed on exit
-        await close_session()
+        # Don't close the session here as it might be needed by the server
+        pass
 
+def start_background_mcp_server():
+    """Start the MCP server in a background thread."""
+    print("[MCP] Initializing MCP server...")
+    
+    # Create a new event loop in a separate thread
+    def run_server():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Start the MCP server
+            server_task = loop.run_until_complete(start_mcp_server())
+            if not server_task or server_task.done():
+                error = server_task.exception() if server_task else "Unknown error"
+                print(f"[MCP] Failed to start MCP server: {error}")
+                return False
+                
+            print("[MCP] MCP server started successfully")
+            
+            # Keep the event loop running
+            loop.run_forever()
+            return True
+            
+        except KeyboardInterrupt:
+            print("\n[MCP] Server stopped by user")
+            return False
+        except Exception as e:
+            print(f"[MCP] Fatal error in MCP server: {e}", exc_info=True)
+            return False
+        finally:
+            try:
+                # Clean up the event loop
+                pending = [t for t in asyncio.all_tasks(loop=loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.close()
+            except Exception as e:
+                print(f"[MCP] Error during cleanup: {e}")
+    
+    # Start the server in a daemon thread
+    import threading
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+    
+    # Wait a moment to ensure the server starts
+    import time
+    time.sleep(2)
+    
+    return server_thread.is_alive()
+
+# Only start the server if this file is run directly
 if __name__ == "__main__":
-    try:
-        asyncio.run(start_server())
-    except KeyboardInterrupt:
-        print("\nServer stopped by user")
+    start_background_mcp_server()
