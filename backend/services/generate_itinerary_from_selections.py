@@ -174,18 +174,39 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     
     try:
         # Generate the itinerary using the Gemini client
-        response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: _gemini_client.generate_content(
-                model=_MODEL,
-                contents=[{"role": "user", "parts": [full_prompt]}],
-                generation_config={"temperature": 0.2, "max_output_tokens": 4000}
-            )
-        )
-        
-        # Parse the response
-        if not response or not response.text:
-            raise RuntimeError("No response from the AI model")
+        try:
+            if hasattr(_gemini_client, 'generate_text'):
+                # For older versions of the Gemini client
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: _gemini_client.generate_text(
+                        model=_MODEL,
+                        prompt=full_prompt,
+                        temperature=0.2,
+                        max_output_tokens=4000
+                    )
+                )
+                response_text = response.text if hasattr(response, 'text') else str(response)
+            else:
+                # For newer versions of the Gemini client
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: _gemini_client.chat.completions.create(
+                        model=_MODEL,
+                        messages=[{"role": "user", "content": full_prompt}],
+                        temperature=0.2,
+                        max_tokens=4000
+                    )
+                )
+                response_text = response.choices[0].message.content if hasattr(response, 'choices') else str(response)
+            
+            # Parse the response
+            if not response_text:
+                raise RuntimeError("No response from the AI model")
+                
+        except Exception as e:
+            logger.error(f"Error generating content: {str(e)}")
+            raise RuntimeError(f"Failed to generate content: {str(e)}")
             
         # Try to parse the JSON response
         try:
