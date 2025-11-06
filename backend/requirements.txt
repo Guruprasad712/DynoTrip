@@ -1,6 +1,6 @@
 # Core Dependencies
 python-dotenv>=1.0.1
-pydantic>=2.7.1
+pydantic
 python-dateutil>=2.9.0.post0
 pytz>=2024.1
 
@@ -15,14 +15,14 @@ google-api-python-client>=2.120.0
 
 # MCP / Google Travel Agent Toolbox
 google-adk>=0.3.0
-fastmcp>=0.3.6
+fastmcp
 
 # Gemini / Vertex AI
 google-genai>=0.5.0
 
 # HTTP & Async
-requests>=2.31.0
-aiohttp>=3.9.3
+requests
+aiohttp
 httpx>=0.27.0
 
 # Caching & Rate Limiting
