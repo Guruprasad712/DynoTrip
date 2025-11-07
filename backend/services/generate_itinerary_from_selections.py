@@ -177,13 +177,9 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: _gemini_client.generate_content(
+                lambda: _gemini_client.models.generate_content(
                     model=_MODEL,
-                    contents=full_prompt,
-                    generation_config={
-                        "temperature": 0.2,
-                        "max_output_tokens": 4000,
-                    }
+                    contents=full_prompt
                 )
             )
             
