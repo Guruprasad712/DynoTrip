@@ -175,25 +175,55 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     try:
         # Generate the itinerary using the Gemini client
         try:
+            # Log the prompt being sent (truncated for brevity)
+            logger.info(f"Sending request to Gemini API with model: {_MODEL}")
+            logger.debug(f"Full prompt (truncated): {full_prompt[:200]}...")
+            
+            # Make the API call
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: _gemini_client.models.generate_content(
                     model=_MODEL,
-                    contents=full_prompt
+                    contents=full_prompt,
+                    generation_config={
+                        "temperature": 0.2,
+                        "max_output_tokens": 4000,
+                        "response_mime_type": "application/json"
+                    }
                 )
             )
             
+            # Debug log the response structure
+            logger.debug(f"Response type: {type(response)}")
+            logger.debug(f"Response attributes: {dir(response)}")
+            
             # Extract the response text
-            if hasattr(response, 'text'):
+            response_text = None
+            
+            # Try different ways to extract the response text based on the response structure
+            if hasattr(response, 'text') and response.text:
                 response_text = response.text
             elif hasattr(response, 'candidates') and response.candidates:
-                response_text = response.candidates[0].content.parts[0].text
-            else:
-                response_text = str(response)
+                if hasattr(response.candidates[0], 'content') and hasattr(response.candidates[0].content, 'parts'):
+                    response_text = response.candidates[0].content.parts[0].text
             
+            # If we still don't have text, try to get the raw response
+            if not response_text and hasattr(response, '_raw_response'):
+                response_text = str(response._raw_response)
+            
+            # If all else fails, use string representation
             if not response_text:
-                raise RuntimeError("No response from the AI model")
+                response_text = str(response)
                 
+            logger.debug(f"Extracted response text (first 500 chars): {response_text[:500]}")
+            
+            if not response_text.strip():
+                raise RuntimeError("Empty response from the AI model")
+            
+            # Clean the response text (remove markdown code blocks if any)
+            import re
+            response_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', response_text, flags=re.MULTILINE).strip()
+            
             # Try to parse the JSON response
             try:
                 result = json.loads(response_text)
@@ -201,8 +231,18 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
                 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse AI response as JSON: {e}")
-                logger.error(f"Raw response: {response_text}")
-                raise RuntimeError("Failed to parse AI response as JSON")
+                logger.error(f"Response type: {type(response_text)}")
+                logger.error(f"Response content (first 1000 chars): {response_text[:1000]}")
+                
+                # Try to extract JSON if it's wrapped in markdown
+                json_match = re.search(r'```(?:json)?\s*({.*?})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    try:
+                        return json.loads(json_match.group(1))
+                    except json.JSONDecodeError as e2:
+                        logger.error("Also failed to parse extracted JSON from markdown")
+                
+                raise RuntimeError(f"Failed to parse AI response as JSON. Response starts with: {response_text[:200]}...")
                 
         except Exception as e:
             logger.error(f"Error generating content: {str(e)}", exc_info=True)
