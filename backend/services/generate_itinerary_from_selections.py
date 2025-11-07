@@ -50,7 +50,14 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     """
     global _TEMPLATE_CACHE
     
-    # Initialize template and MCP client
+    # Initialize MCP client with proper headers
+    mcp_client = FastMCP(
+        "itinerary_agent",
+        headers={
+            "Accept": "text/event-stream",
+            "Content-Type": "application/json"
+        }
+    )
     try:
         if _TEMPLATE_CACHE is None:
             _TEMPLATE_CACHE = await read_file_async(TEMPLATE_PATH)

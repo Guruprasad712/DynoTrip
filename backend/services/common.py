@@ -22,8 +22,11 @@ logging.getLogger("fastmcp").setLevel(logging.ERROR)
 
 # Create a reusable MCP client (HTTP preferred)
 def get_mcp_client() -> Client:
-    """Get a configured MCP client.
+    """Get a configured MCP client with proper headers.
     
+    Returns:
+        Client: Configured MCP client with proper headers
+        
     Raises:
         RuntimeError: If MCP_SERVER_URL is not set or client cannot be created
     """
@@ -35,7 +38,14 @@ def get_mcp_client() -> Client:
         raise RuntimeError("StreamableHttpTransport is not available")
     
     try:
-        transport = StreamableHttpTransport(url=mcp_url)
+        # Create transport with proper headers
+        transport = StreamableHttpTransport(
+            url=mcp_url,
+            headers={
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json"
+            }
+        )
         return Client(transport=transport)
     except Exception as e:
         raise RuntimeError(f"Failed to create MCP client: {str(e)}")
