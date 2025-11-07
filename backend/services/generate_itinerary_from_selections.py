@@ -177,7 +177,7 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: _gemini_client.models.generate_content(
+                lambda: _gemini_client.generate_content(
                     model=_MODEL,
                     contents=full_prompt,
                     generation_config={
@@ -198,18 +198,19 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
             if not response_text:
                 raise RuntimeError("No response from the AI model")
                 
+            # Try to parse the JSON response
+            try:
+                result = json.loads(response_text)
+                return result
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse AI response as JSON: {e}")
+                logger.error(f"Raw response: {response_text}")
+                raise RuntimeError("Failed to parse AI response as JSON")
+                
         except Exception as e:
             logger.error(f"Error generating content: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to generate content: {str(e)}")
-            
-        # Try to parse the JSON response
-        try:
-            result = json.loads(response.text)
-            return result
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            logger.error(f"Raw response: {response.text}")
             return {"error": "Failed to generate itinerary: invalid response format"}
             
     except Exception as e:
