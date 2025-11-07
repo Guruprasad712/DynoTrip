@@ -175,37 +175,31 @@ async def generate_itinerary_from_selections(input_json: Dict[str, Any]) -> Dict
     try:
         # Generate the itinerary using the Gemini client
         try:
-            if hasattr(_gemini_client, 'generate_text'):
-                # For older versions of the Gemini client
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: _gemini_client.generate_text(
-                        model=_MODEL,
-                        prompt=full_prompt,
-                        temperature=0.2,
-                        max_output_tokens=4000
-                    )
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: _gemini_client.models.generate_content(
+                    model=_MODEL,
+                    contents=full_prompt,
+                    generation_config={
+                        "temperature": 0.2,
+                        "max_output_tokens": 4000,
+                    }
                 )
-                response_text = response.text if hasattr(response, 'text') else str(response)
-            else:
-                # For newer versions of the Gemini client
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: _gemini_client.chat.completions.create(
-                        model=_MODEL,
-                        messages=[{"role": "user", "content": full_prompt}],
-                        temperature=0.2,
-                        max_tokens=4000
-                    )
-                )
-                response_text = response.choices[0].message.content if hasattr(response, 'choices') else str(response)
+            )
             
-            # Parse the response
+            # Extract the response text
+            if hasattr(response, 'text'):
+                response_text = response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                response_text = response.candidates[0].content.parts[0].text
+            else:
+                response_text = str(response)
+            
             if not response_text:
                 raise RuntimeError("No response from the AI model")
                 
         except Exception as e:
-            logger.error(f"Error generating content: {str(e)}")
+            logger.error(f"Error generating content: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to generate content: {str(e)}")
             
         # Try to parse the JSON response

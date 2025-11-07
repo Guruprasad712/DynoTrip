@@ -41,17 +41,9 @@ def get_mcp_client() -> Client:
         raise RuntimeError(f"Failed to create MCP client: {str(e)}")
 
 # Create a reusable Gemini client
-# Prefer API key when available; otherwise fall back to Vertex AI (ADC)
-_MODEL = os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash")
-_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("VERTEX_API_KEY")
-if _API_KEY:
-    _gemini_client = genai.Client(api_key=_API_KEY)
-else:
-    _gemini_client = genai.Client(
-        vertexai=True,
-        project=os.getenv("PROJECT_ID"),
-        location=os.getenv("VERTEX_AI_LOCATION", "us-central1"),
-    )
+# The client gets the API key from the environment variable `GEMINI_API_KEY`
+_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+_gemini_client = genai.Client()  # API key is automatically read from GEMINI_API_KEY environment variable
 
 
 def read_file(path: str) -> str:
